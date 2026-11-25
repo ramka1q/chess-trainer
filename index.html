@@ -180,7 +180,9 @@ button{font-family:inherit}
   .modal .box{width:94vw;padding:16px;max-height:86vh;overflow:auto}
   .moves{max-height:180px}
   .btn{font-size:15px;padding:11px 12px}
-  .node .lbl{font-size:12.5px}
+  .node .lbl{position:absolute;top:100%;left:50%!important;right:auto!important;transform:translateX(-50%);text-align:center!important;margin-top:4px;white-space:normal;width:160px;font-size:12px;line-height:1.2}
+  .node{margin:6px 0 46px}
+  .hwrap>div:last-child{order:-1}   /* plan / session card first on phones */
 }
 @media (max-width:420px){
   .bub{font-size:13.5px} .card{padding:10px} .big{font-size:24px}
@@ -675,7 +677,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='1.0.0';
+const APP_VERSION='1.0.1';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -3002,6 +3004,7 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '1.0.1':['📱 На телефоні кнопка «Почати заняття» тепер угорі, а назви уроків на Шляху не обрізаються'],
   '1.0.0':['📱 Мобільна версія: дошка на весь екран, меню внизу, налаштування під ⚙',
            '🌐 Повний Stockfish у браузері (сильніший) і смуга завантаження',
            '💻 Версія для ПК зі Stockfish 19 на всіх ядрах і кнопка «Скачати для ПК»',
