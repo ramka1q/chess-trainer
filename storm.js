@@ -280,7 +280,7 @@ function setRoomAlpha(a){W3.roomA=a;for(const m of W3.fade){const op=a*m.userDat
 function sqW(sq){const[f,r]=fr(sq);return W3.flip?{x:3.5-f,z:r-3.5}:{x:f-3.5,z:3.5-r}}
 
 /* same rule as Board.render in index.html */
-const isLight=sq=>((sq.charCodeAt(0)-97)+(+sq[1]))%2===1;
+const isLight=sq=>((sq.charCodeAt(0)-97)+(+sq[1]))%2===0;
 function drawBoard(info){
   const c=W3.bcv,x=c.getContext('2d'),S=c.width,q=S/8;const cs=getComputedStyle(document.documentElement);const V=n=>cs.getPropertyValue(n).trim();
   const L=V('--light')||'#EBECD0',D=V('--dark')||'#739552',HL=V('--hl-l')||'#F5F682',HD=V('--hl-d')||'#B9CA43';

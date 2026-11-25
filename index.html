@@ -271,8 +271,8 @@ body.wood .sq.d.hl{background-image:linear-gradient(rgba(170,190,40,.5),rgba(170
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="pieces.js"></script>
 <script src="masters.js"></script>
-<script src="storm.js?v=1.9.1" defer></script>
-<script src="icons.js?v=1.9.1" defer></script>
+<script src="storm.js?v=1.9.2" defer></script>
+<script src="icons.js?v=1.9.2" defer></script>
 <script>
 "use strict";
 /* ================= UTIL ================= */
@@ -478,7 +478,7 @@ class Board{
     const tg=this.sel&&this.showDots?this.targets(this.sel):[];
     for(let i=0;i<64;i++){
       const sq=this.idxToSq(i),d=this.sqs[i],r=Math.floor(i/8),c=i%8;
-      const light=((sq.charCodeAt(0)-97)+(+sq[1]))%2===1;
+      const light=((sq.charCodeAt(0)-97)+(+sq[1]))%2===0; /* a1 is dark, h1 light: the queen stands on her own colour */
       let cls='sq '+(light?'l':'d');
       if(this.last&&(this.last[0]===sq||this.last[1]===sq))cls+=' hl';
       if(this.sel===sq)cls+=' hl';
@@ -843,7 +843,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='1.9.1';
+const APP_VERSION='1.9.2';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -3386,6 +3386,7 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '1.9.2':['🛠 Виправлено розфарбовку дошки: кутова клітинка a1 тепер темна, і ферзь стоїть на своєму кольорі (зелена й деревʼяна дошка)'],
   '1.9.1':['📱 При першому вході сайт питає, чи потужний твій пристрій: потужний отримує повний Stockfish (~80 МБ), звичайний легкий (7 МБ). Змінити можна в Налаштуваннях'],
   '1.9.0':['🧠 Спочатку працює легкий Stockfish (7 МБ), а у фоні тренер перевіряє пристрій. Якщо він потужний, тихо качає повний (~80 МБ) і пропонує перезавантажити сайт, щоб думати ним. Статус є в Налаштуваннях'],
   '1.8.2':['🛠 Stockfish більше не «завантажується» заново при кожному вході: якщо він уже збережений на пристрої, сайт бере його з памʼяті одразу'],
