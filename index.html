@@ -64,6 +64,12 @@ body.wood .sq.l{background-color:var(--light);background-image:var(--woodL)}
 body.wood .sq.d{background-color:var(--dark);background-image:var(--woodD)}
 body.wood .sq.l.hl{background-image:linear-gradient(rgba(190,205,60,.5),rgba(190,205,60,.5)),var(--woodL)}
 body.wood .sq.d.hl{background-image:linear-gradient(rgba(170,190,40,.5),rgba(170,190,40,.5)),var(--woodD)}
+.swt{position:relative;display:inline-block;width:52px;height:30px;flex-shrink:0;cursor:pointer}
+.swt input{opacity:0;width:0;height:0}
+.swt span{position:absolute;inset:0;background:#4a4744;border-radius:30px;transition:.2s}
+.swt span:before{content:'';position:absolute;width:24px;height:24px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
+.swt input:checked+span{background:var(--green)}
+.swt input:checked+span:before{transform:translateX(22px)}
 .thOpt{flex:1;max-width:170px;background:#2b2926;border:3px solid #3c3a37;border-radius:12px;padding:10px;cursor:pointer;color:#fff;font-weight:700}
 .thOpt:hover{border-color:var(--green)}
 .thOpt .pv{display:grid;grid-template-columns:repeat(4,1fr);aspect-ratio:1;border-radius:6px;overflow:hidden;margin-bottom:8px}
@@ -236,6 +242,7 @@ body.wood .sq.d.hl{background-image:linear-gradient(rgba(170,190,40,.5),rgba(170
     <a data-v="endgames"><span class="ic">♔</span>Ендшпіль</a>
     <a data-v="review"><span class="ic">🔁</span>Повторення <span id="dueBadge" class="tag" style="background:var(--red);color:#fff"></span></a>
     <a data-v="stats"><span class="ic">📊</span>Прогрес</a>
+    <a data-v="settings"><span class="ic">⚙️</span>Налаштування</a>
     <div class="me"><div id="meRank"></div><div class="xpbar"><i id="meXp"></i></div><div id="meXpT" class="small" style="margin-top:4px"></div><div id="meElo" class="small" style="margin-top:8px;cursor:pointer" title="Змінити ело"></div><div style="margin-top:8px"><label class="small"><input type="checkbox" id="sndChk" checked> Звук</label></div>
       <div style="margin-top:8px" class="small">🎨 Дошка:<select id="thSel" style="width:100%;margin-top:3px;background:#1f1e1b;color:#fff;border:1px solid #3c3a37;border-radius:4px;padding:3px"><option value="green">🟩 Зелена</option><option value="wood">🪵 Деревʼяна</option></select></div>
       <div style="margin-top:8px" class="small">🧠 Хто думає:<select id="engSel" style="width:100%;margin-top:3px;background:#1f1e1b;color:#fff;border:1px solid #3c3a37;border-radius:4px;padding:3px"><option value="auto">Авто (найкраще доступне)</option><option value="native">💻 Процесор комп’ютера</option><option value="browser">🌐 Браузер, швидкий (7 МБ)</option><option value="full">🌐 Браузер, повний (80 МБ, сильніший, багатоядерний)</option></select>
@@ -264,7 +271,7 @@ body.wood .sq.d.hl{background-image:linear-gradient(rgba(170,190,40,.5),rgba(170
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="pieces.js"></script>
 <script src="masters.js"></script>
-<script src="storm.js?v=1.7.0" defer></script>
+<script src="storm.js?v=1.7.1" defer></script>
 <script>
 "use strict";
 /* ================= UTIL ================= */
@@ -731,7 +738,7 @@ $('#logoImg').src=PIC('w','n');$('#mtLogo').src=PIC('w','n');
 /* on phones the settings block (rank, elo, sound, engine) lives in a pop-up */
 const ME_NODE=document.querySelector('#nav .me');
 function restoreMe(){if(ME_NODE.parentElement!==$('#nav')){$('#nav').appendChild(ME_NODE);ME_NODE.style.display=''}}
-$('#mtSet').onclick=()=>{modal('<h2>⚙ Налаштування</h2><div id="setSlot" style="text-align:left"></div><button class="btn" style="width:100%;margin-top:12px" onclick="closeModal()">Готово</button>');$('#setSlot').appendChild(ME_NODE);ME_NODE.style.display='block'};
+$('#mtSet').onclick=()=>{modal('<h2>⚙ Налаштування</h2><button class="btn g" style="width:100%;margin-bottom:10px" onclick="closeModal();showView(\'settings\')">🎨 Дошка, Шахи-Буря та інше →</button><div id="setSlot" style="text-align:left"></div><button class="btn" style="width:100%;margin-top:12px" onclick="closeModal()">Готово</button>');$('#setSlot').appendChild(ME_NODE);ME_NODE.style.display='block'};
 function panel(title,body,foot){$('#ph').innerHTML=title;$('#pb').innerHTML=body||'';$('#pf').innerHTML=foot||'';$('#pf').style.display=foot?'flex':'none'}
 function coachSay(html,kind='',target){const el=target||$('#coachBox');if(!el)return;el.innerHTML=`<div class="coach"><div class="ava"><img src="${PIC('w','n')}"></div><div class="bub ${kind}">${html}</div></div>`}
 function players(top,bot){$('#plTop').innerHTML=top||'';$('#plBot').innerHTML=bot||''}
@@ -764,7 +771,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='1.7.0';
+const APP_VERSION='1.7.1';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -3091,7 +3098,7 @@ function iconKey(l){
 
 /* ================= VIEWS ================= */
 /* the secret tab shows its real name only after you have opened it once */
-function updSecret(){const a=document.querySelector('#nav a.secret');if(!a)return;const f=!!(S.storm&&S.storm.found);a.classList.toggle('found',f);a.querySelector('.ic').textContent=f?'🌪':'❔';a.querySelector('.lbl').textContent=f?'Шахи-Буря':'???';a.title=f?'Шахи-Буря':'???'}
+function updSecret(){const a=document.querySelector('#nav a.secret');if(!a)return;a.style.display=S.stormOff?'none':'';const f=!!(S.storm&&S.storm.found);a.classList.toggle('found',f);a.querySelector('.ic').textContent=f?'🌪':'❔';a.querySelector('.lbl').textContent=f?'Шахи-Буря':'???';a.title=f?'Шахи-Буря':'???'}
 updSecret();
 function setNav(v){document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===v))}
 function showMain(){$('#home').style.display='none';$('#main').style.display='flex'}
@@ -3101,7 +3108,8 @@ document.querySelectorAll('#nav a').forEach(a=>a.onclick=()=>{snd('click');showV
 function showView(v){
   SESSION=null;stopCur();setNav(v);updMe();
   if(v==='coach'){showHome();viewHome();startCoachSession();return}
-  if(v==='home'||v==='stats'||v==='review'||v==='mygames'){showHome();({home:viewHome,stats:viewStats,review:viewReview,mygames:viewMyGames})[v]();return}
+  if(v==='storm'&&S.stormOff)v='settings';
+  if(v==='home'||v==='stats'||v==='review'||v==='mygames'||v==='settings'){showHome();setNav(v);({home:viewHome,stats:viewStats,review:viewReview,mygames:viewMyGames,settings:viewSettings})[v]();return}
   showMain();
   ({play:viewPlay,storm:()=>window.viewStorm(),puzzles:viewPuzzles,openings:viewOpenings,vision:viewVision,endgames:viewEndgames,think:viewThink,calc:viewCalc,rush:viewRush,strategy:viewStrategy,masters:viewMasters,test:viewTest})[v]();
 }
@@ -3130,7 +3138,7 @@ function viewHome(){
       <div class="row"><div class="coach" style="margin:0"><div class="ava"><img src="${PIC('w','n')}"></div></div><div><b style="font-size:17px">Заняття з тренером</b><div class="small mut">Тренер сам веде тебе по всьому</div></div></div>
       <div class="small" style="margin:10px 0">${plan.map((s,i)=>`<div style="margin:3px 0">${i+1}. ${esc(s.n)}</div>`).join('')}</div>
       <button class="btn" id="goSess" style="width:100%">▶ Почати заняття</button></div>
-    ${!(S.storm&&S.storm.found)?`<div class="card secCard"><div class="noise">📻 …шшш… кх… шшш…</div>
+    ${!(S.storm&&S.storm.found)&&!S.stormOff?`<div class="card secCard"><div class="noise">📻 …шшш… кх… шшш…</div>
       <div class="small" style="margin:8px 0 10px">…штормове попередження… у меню зʼявилася вкладка <b style="color:#d9ccf0;letter-spacing:.2em">???</b>. Ніхто не знає, що за нею…</div>
       <button class="btn g" id="goStorm" style="width:100%">❔ Зазирнути</button></div>`:''}
     <div class="card">
@@ -3157,6 +3165,20 @@ function viewHome(){
   const c=document.querySelector('.node.cur');if(c)setTimeout(()=>c.scrollIntoView({block:'center',behavior:'smooth'}),50);
 }
 
+function viewSettings(){
+  const th=S.boardTheme||'green';
+  const sw=(id,on)=>`<label class="swt"><input type="checkbox" id="${id}" ${on?'checked':''}><span></span></label>`;
+  $('#home').innerHTML=`<div style="max-width:700px;margin:0 auto"><h2>⚙️ Налаштування</h2>
+    <div class="card"><h4>🎨 Як виглядає дошка</h4><div class="row" style="gap:12px;margin-top:8px">
+      <button class="thOpt" data-th="green" style="${th==='green'?'border-color:var(--green)':''}">${themePreview('green')}🟩 Зелена ${th==='green'?'✓':''}</button>
+      <button class="thOpt" data-th="wood" style="${th==='wood'?'border-color:var(--green)':''}">${themePreview('wood')}🪵 Деревʼяна ${th==='wood'?'✓':''}</button></div></div>
+    <div class="card"><div class="row" style="justify-content:space-between;gap:12px"><div><h4 style="margin:0">🌪 Шахи-Буря</h4><div class="small mut" style="margin-top:4px">Режим, де погода змінює партію. Якщо вимкнути, вкладка й картка на головній зникнуть.</div></div>${sw('setStorm',!S.stormOff)}</div></div>
+    <div class="card"><div class="row" style="justify-content:space-between;gap:12px"><div><h4 style="margin:0">🔊 Звук</h4><div class="small mut" style="margin-top:4px">Звуки ходів, підказок і подій.</div></div>${sw('setSnd',S.sound!==false)}</div></div>
+  </div>`;
+  document.querySelectorAll('#home [data-th]').forEach(b=>b.onclick=()=>{S.boardTheme=b.dataset.th;save();applyTheme(S.boardTheme);snd('click');viewSettings()});
+  $('#setStorm').onchange=e=>{S.stormOff=!e.target.checked;save();updSecret();toast(S.stormOff?'Шахи-Буря вимкнено':'🌪 Шахи-Буря увімкнено')};
+  $('#setSnd').onchange=e=>{S.sound=e.target.checked;save();updMe()};
+}
 function viewReview(){
   const due=dueList();const all=Object.keys(S.srs).filter(id=>LESSONS[id]&&LESSONS[id].t!=='boss');
   $('#home').innerHTML=`<div style="max-width:700px;margin:0 auto"><h2>🔁 Повторення</h2>
@@ -3282,6 +3304,7 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '1.7.1':['⚙️ Нова сторінка «Налаштування»: вибір дошки, увімкнути чи вимкнути Шахи-Бурю, звук'],
   '1.7.0':['🪵 Нова деревʼяна дошка! При першому вході можна вибрати зелену або деревʼяну, а потім змінити в налаштуваннях (🎨 Дошка)'],
   '1.6.4':['❔ Знак «?» тепер стоїть зверху над фігурою, а пояснення програється тільки коли на нього натиснеш'],
   '1.6.3':['📱 Шахи-Буря швидше працює на телефонах: легша 3D-сцена, менше частинок, корона крутиться економніше, туман без важкого розмиття'],
