@@ -238,7 +238,7 @@ button{font-family:inherit}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="pieces.js"></script>
 <script src="masters.js"></script>
-<script src="storm.js" defer></script>
+<script src="storm.js?v=1.4.2" defer></script>
 <script>
 "use strict";
 /* ================= UTIL ================= */
@@ -700,7 +700,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='1.4.1';
+const APP_VERSION='1.4.2';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -3210,6 +3210,7 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '1.4.2':['🛠 Оновлення тепер завжди підтягує свіжі файли (раніше браузер міг тримати старий режим Шахи-Буря)'],
   '1.4.1':['💥 Взяття ферзя: прибрано великі написи, а після анімації хід більше не програється вдруге'],
   '1.4.0':['🌐 Шахи-Буря по мережі: створи запрошення, надішли посилання другу, і грайте кожен на своєму пристрої',
            '💥 Епічні анімації взяття ферзя: чим слабша фігура, тим крутіше. Пішак, що бере ферзя, отримує корону!',
