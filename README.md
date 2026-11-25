@@ -20,7 +20,7 @@
 
 ## Подяки та ліцензії
 
-- [Stockfish](https://stockfishchess.org/) (GPLv3) — шаховий рушій; браузерна версія з пакета [stockfish.js](https://github.com/nmrugg/stockfish.js).
+- [Stockfish](https://stockfishchess.org/) (GPLv3) — шаховий рушій; браузерна версія з пакета [stockfish.js](https://github.com/nmrugg/stockfish.js) (файл `stockfish-mt.js` — його незмінна копія для багатоядерного режиму).
 - [chess.js](https://github.com/jhlywa/chess.js) (BSD-2) — правила шахів.
 - Фігури «cburnett» — Colin M.L. Burnett, CC BY-SA 3.0 (як на lichess).
 - Задачі та партії майстрів — відкрита база [lichess.org](https://lichess.org) (CC0).

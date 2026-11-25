@@ -1,9 +1,17 @@
 /* Service worker: makes the trainer installable and keeps the big engine files
    (Stockfish WASM, chess.js) in a cache, so they are downloaded only once. */
-const APP = 'trainer-app-v1';
+const APP = 'trainer-app-v2';
 const LIBS = 'trainer-libs-v1';
 const SHELL = ['./', 'index.html', 'pieces.js', 'masters.js', 'manifest.json', 'icon.svg'];
 
+async function isolate(r) {
+  r = await r;
+  if (!r || r.status === 0 || r.type === 'opaqueredirect') return r;
+  const h = new Headers(r.headers);
+  h.set('Cross-Origin-Opener-Policy', 'same-origin');
+  h.set('Cross-Origin-Embedder-Policy', 'credentialless');
+  return new Response(r.body, { status: r.status, statusText: r.statusText, headers: h });
+}
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(APP).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
 });
@@ -24,11 +32,12 @@ self.addEventListener('fetch', e => {
     }));
     return;
   }
-  /* own files: network first (always fresh), cache as offline fallback */
-  if (u.origin === location.origin && !u.pathname.startsWith('/engine')) {
+  /* own files: network first (always fresh), cache as offline fallback.
+     Headers make the page cross-origin isolated, so the multi-core Stockfish can use all CPU cores. */
+  if (u.origin === location.origin && !u.pathname.startsWith('/engine') && !u.pathname.startsWith('/update')) {
     e.respondWith(fetch(e.request).then(r => {
       if (r.ok) caches.open(APP).then(c => c.put(e.request, r.clone()));
-      return r;
-    }).catch(() => caches.match(e.request).then(h => h || caches.match('index.html'))));
+      return isolate(r);
+    }).catch(() => caches.match(e.request).then(h => isolate(h || caches.match('index.html')))));
   }
 });

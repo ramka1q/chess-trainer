@@ -211,7 +211,7 @@ button{font-family:inherit}
     <a data-v="review"><span class="ic">🔁</span>Повторення <span id="dueBadge" class="tag" style="background:var(--red);color:#fff"></span></a>
     <a data-v="stats"><span class="ic">📊</span>Прогрес</a>
     <div class="me"><div id="meRank"></div><div class="xpbar"><i id="meXp"></i></div><div id="meXpT" class="small" style="margin-top:4px"></div><div id="meElo" class="small" style="margin-top:8px;cursor:pointer" title="Змінити ело"></div><div style="margin-top:8px"><label class="small"><input type="checkbox" id="sndChk" checked> Звук</label></div>
-      <div style="margin-top:8px" class="small">🧠 Хто думає:<select id="engSel" style="width:100%;margin-top:3px;background:#1f1e1b;color:#fff;border:1px solid #3c3a37;border-radius:4px;padding:3px"><option value="auto">Авто (найкраще доступне)</option><option value="native">💻 Процесор комп’ютера</option><option value="browser">🌐 Браузер, швидкий (7 МБ)</option><option value="full">🌐 Браузер, повний (80 МБ, сильніший)</option></select>
+      <div style="margin-top:8px" class="small">🧠 Хто думає:<select id="engSel" style="width:100%;margin-top:3px;background:#1f1e1b;color:#fff;border:1px solid #3c3a37;border-radius:4px;padding:3px"><option value="auto">Авто (найкраще доступне)</option><option value="native">💻 Процесор комп’ютера</option><option value="browser">🌐 Браузер, швидкий (7 МБ)</option><option value="full">🌐 Браузер, повний (80 МБ, сильніший, багатоядерний)</option></select>
       <button id="syBtn" class="btn g sm" style="margin-top:8px;width:100%">🔄 Синхронізація</button>
       <a id="pcDl" class="btn g sm" style="display:none;margin-top:8px;text-align:center;text-decoration:none" href="https://github.com/ramka1q/chess-trainer/releases/latest/download/chess-trainer-pc.zip">⬇ Скачати для ПК (Stockfish 19)</a><div id="engName" class="dim" style="margin-top:3px;font-size:11px"></div></div></div>
   </nav>
@@ -359,6 +359,14 @@ function exchangeLine(fen,sq,att,from){
   const pinned=defs.length&&!after.moves({verbose:true}).some(x=>x.to===sq)?defs[0].sq:null;
   const refuse=stopAt<steps.length?steps[stopAt].v-sNext[stopAt+1]:null;
   return{steps,bal,pinned,stopAt,refuse};
+}
+function pinInfo(fen,sq){
+  const g=new Chess(fen);const p=g.get(sq);if(!p)return null;
+  const B=g.board();let k=null;for(let r=0;r<8;r++)for(let f=0;f<8;f++){const q=B[r][f];if(q&&q.type==='k'&&q.color===p.color)k=String.fromCharCode(97+f)+(8-r)}
+  if(!k)return null;
+  const before=new Set(attackersOf(g,k,other(p.color)).map(a=>a.sq));
+  g.remove(sq);const after=attackersOf(g,k,other(p.color)).filter(a=>!before.has(a.sq)&&'brq'.includes(a.type));
+  return after.length?{from:after[0].sq,type:after[0].type,king:k}:null;
 }
 function isHangingAt(g,sq){ /* piece on sq can be won by the enemy */
   const p=g.get(sq);if(!p||p.type==='k')return false;
@@ -510,14 +518,19 @@ const SF17_JS='https://unpkg.com/stockfish@17.1.0/src/stockfish-17.1-lite-single
 const SF17_WASM='https://unpkg.com/stockfish@17.1.0/src/stockfish-17.1-lite-single-03e3232.wasm';
 const SF17F_JS='https://unpkg.com/stockfish@17.1.0/src/stockfish-17.1-single-a496a04.js';
 const SF17F_WASM='https://unpkg.com/stockfish@17.1.0/src/stockfish-17.1-single-a496a04.wasm'; /* loaded as 6 parts (-part-0..5.wasm) */
+/* multi-core build: needs a cross-origin isolated page (the service worker adds the headers) */
+const SF17M_JS='stockfish-mt.js'; /* copy of stockfish@17.1.0 src/stockfish-17.1-8e4d048.js (GPLv3) */
+const SF17M_WASM='https://unpkg.com/stockfish@17.1.0/src/stockfish-17.1-8e4d048.wasm';
+const canMulti=()=>self.crossOriginIsolated&&typeof SharedArrayBuffer!=='undefined'&&(navigator.hardwareConcurrency||1)>2&&!S.noMulti;
+const mtThreads=()=>Math.max(2,Math.min(8,(navigator.hardwareConcurrency||4)-1));
 let SF17_FAIL=false;const SF_BLOBS={};
 let PRELOAD=null;
-function preloadEngine(full){
-  const key=full?'full':'lite';PRELOAD=PRELOAD||{};
+function preloadEngine(full,multi){
+  const key=multi?'multi':full?'full':'lite';PRELOAD=PRELOAD||{};
   if(!PRELOAD[key])PRELOAD[key]=(async()=>{
-    const base=(full?SF17F_WASM:SF17_WASM).replace(/\.wasm$/,'');
+    const base=(multi?SF17M_WASM:full?SF17F_WASM:SF17_WASM).replace(/\.wasm$/,'');
     const urls=full?[0,1,2,3,4,5].map(i=>`${base}-part-${i}.wasm`):[SF17_WASM];
-    const sizes=full?Array(6).fill(13175551):[7280741];const total=sizes.reduce((a,b)=>a+b,0);
+    const sizes=full?Array(6).fill(multi?13144776:13175551):[7280741];const total=sizes.reduce((a,b)=>a+b,0);
     let done=0,shown=false;const t0=Date.now();
     for(const u of urls){
       const r=await fetch(u);if(!r.ok||!r.body){continue}
@@ -553,16 +566,22 @@ class Engine{
       if(engineMode()==='native'&&this.kind!=='sf10')toast('⚠️ Stockfish на процесорі недоступний: запусти тренер через «Запустити шахи.cmd». Поки що думає браузер.',5000);
       if(this.kind==='sf17'&&!SF17_FAIL){
         try{
-          const full=engineMode()==='full';
-          await preloadEngine(full);
-          const u=await sf17Blob(full?SF17F_JS:SF17_JS);this.w=new Worker(u+'#'+encodeURIComponent(full?SF17F_WASM:SF17_WASM));
+          /* only the coach (analysis) gets the big engine; eval bar and bots use the light one, so memory stays low */
+          const full=engineMode()==='full'&&this.slot==='coach';const multi=full&&canMulti();this.multi=multi;
+          await preloadEngine(full,multi);
+          /* the multi-core build must run from our own origin (it starts helper workers from its own URL) */
+          const u=multi?'stockfish-mt.js':await sf17Blob(full?SF17F_JS:SF17_JS);this.w=new Worker(u+'#'+encodeURIComponent(multi?SF17M_WASM:full?SF17F_WASM:SF17_WASM));
           this.w.onmessage=e=>{const l=typeof e.data==='string'?e.data:'';for(const f of this.ls.slice())f(l)};
           this.send('uci');
           const ok=await Promise.race([this.wait(l=>l==='uciok').then(()=>true),sleep(full?400000:25000).then(()=>false)]);
           if(!ok)throw new Error('sf17 timeout');
-          this.send('setoption name Hash value 32');
-          this.send('isready');await this.wait(l=>l==='readyok');this.name=full?'Stockfish 17.1 NNUE (повний, браузер)':'Stockfish 17.1 NNUE (браузер)';return;
-        }catch(e){console.warn('Stockfish 17 failed, falling back to 10',e);SF17_FAIL=true;try{this.w&&this.w.terminate()}catch(_){}this.ls=[]}
+          this.send('setoption name Hash value '+(multi?64:32));
+          if(multi&&this.slot==='coach')this.send('setoption name Threads value '+mtThreads());
+          this.send('isready');await this.wait(l=>l==='readyok');
+          this.name=multi&&this.slot==='coach'?`Stockfish 17.1 NNUE (повний, ${mtThreads()} ${plural(mtThreads(),'ядро','ядра','ядер')})`:full?'Stockfish 17.1 NNUE (повний, браузер)':'Stockfish 17.1 NNUE (браузер)';return;
+        }catch(e){
+          if(this.multi&&!S.noMulti){console.warn('multi-core engine failed, using single-core',e);S.noMulti=true;save();try{this.w&&this.w.terminate()}catch(_){}this.ls=[];this.ready=null;return this.init()}
+          console.warn('Stockfish 17 failed, falling back to 10',e);SF17_FAIL=true;try{this.w&&this.w.terminate()}catch(_){}this.ls=[]}
       }
       const u=await sfBlob();this.w=new Worker(u);this.name='Stockfish 10';
       this.w.onmessage=e=>{const l=typeof e.data==='string'?e.data:'';for(const f of this.ls.slice())f(l)};
@@ -679,7 +698,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='1.1.0';
+const APP_VERSION='1.2.0';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -712,7 +731,9 @@ setTimeout(checkUpdate,3000);
 /* on the web version offer the PC download (native Stockfish 19 on all cores) */
 if(!['localhost','127.0.0.1'].includes(location.hostname))$('#pcDl').style.display='block';
 /* installable app (add to home screen) + offline cache of the engine */
-if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('sw.js').then(()=>{
+  if(!self.crossOriginIsolated&&!navigator.serviceWorker.controller&&!sessionStorage.getItem('coiReload')){sessionStorage.setItem('coiReload','1');navigator.serviceWorker.ready.then(()=>location.reload())}
+}).catch(()=>{});
 $('#sndChk').onchange=e=>{S.sound=e.target.checked;save()};
 const ACH={
   first:{i:'🧩',n:'Перша задача',d:'Розв’яжи першу задачу'},
@@ -1222,7 +1243,14 @@ function VisionRun(opt){ /* opt:{task:'win'|'danger'|'mixed', n, onEnd, lesson, 
     const lines=[];
     const say=(fin)=>{coachSay(`<div class="t">🔎 Що буде на ${it.sq}</div>${lines.map(x=>`<div style="margin:2px 0">${x}</div>`).join('')}${fin||''}<div style="margin-top:8px"><button class="chip" id="dmBack" style="background:#eee;color:#222">↩ Повернутись до позиції</button></div>`,fin&&/мінус|не вийде/.test(fin)?'bad':'good');
       const bb=$('#dmBack');if(bb)bb.onclick=()=>{demoTok++;board.set(new Chess(fen));board.marks=saved.marks;board.arrows=saved.arrows;board.render();render(lastMsg,lastKind);addBtns&&addBtns()}};
-    if(!L){const p=new Chess(fen).get(it.sq);lines.push(`${p?NAME[p.type][0].toUpperCase()+NAME[p.type].slice(1):'Фігуру'} на ${it.sq} зараз <b>ніхто не б’є</b>, тож забрати її не можна.`);say('');return}
+    if(!L){const g0=new Chess(fen);const p=g0.get(it.sq);
+      const pseudo=attackersOf(g0,it.sq,att).filter(a=>a.sq!==it.sq);
+      const pinned=pseudo.map(a=>({a,pin:pinInfo(fen,a.sq)})).find(x=>x.pin);
+      if(pinned){const a=pinned.a,P=pinned.pin;
+        board.arrows=[{from:a.sq,to:it.sq,c:'y'},{from:P.from,to:P.king,c:'r'}];board.marks={[a.sq]:'bad',[it.sq]:'pick'};board.render();
+        lines.push(`${NAME[a.type][0].toUpperCase()+NAME[a.type].slice(1)} на <b>${a.sq}</b> бив би на ${it.sq} (жовта стрілка), але він <b>зв’язаний</b>: ${NAME[P.type]} на ${P.from} стоїть з ним на одній лінії з королем на ${P.king} (червона стрілка). Якщо він зійде з місця, король опиниться під шахом, а так ходити не можна.`);
+        say('<div style="margin-top:6px"><b>Тому забрати цю фігуру зараз не вийде.</b></div>');return}
+      lines.push(`${p?NAME[p.type][0].toUpperCase()+NAME[p.type].slice(1):'Фігуру'} на ${it.sq} зараз <b>ніхто не б’є</b>, тож забрати її не можна.`);say('');return}
     const t=new Chess(setTurn(fen,att));board.g=t;board.marks={[it.sq]:'pick'};board.arrows=[];board.last=null;board.render();
     say('<div class="mut small">Дивись на дошку…</div>');
     let bal=0;
@@ -1240,7 +1268,8 @@ function VisionRun(opt){ /* opt:{task:'win'|'danger'|'mixed', n, onEnd, lesson, 
     if(my!==demoTok)return;
     const attWho=att===meSide?'ти':'суперник';
     let fin;
-    if(L.pinned)fin=`<div style="margin-top:6px">Фігура на ${L.pinned} могла б забрати назад, але вона <b>зв’язана</b>: якщо зійде з місця, відкриє свого короля. Тому забрати назад нікому.</div>`;
+    if(L.pinned){const P=pinInfo(fen,L.pinned);if(P){board.arrows=[...board.arrows,{from:L.pinned,to:it.sq,c:'y'},{from:P.from,to:P.king,c:'r'}];board.marks={...board.marks,[L.pinned]:'bad'};board.render()}}
+    if(L.pinned)fin=`<div style="margin-top:6px">${(()=>{const P=pinInfo(fen,L.pinned);return P?`Дивись стрілки: ${NAME[P.type]} на ${P.from} зв’язує фігуру на ${L.pinned} з королем на ${P.king}. `:''})()}Фігура на ${L.pinned} могла б забрати назад, але вона <b>зв’язана</b>: якщо зійде з місця, відкриє свого короля. Тому забрати назад нікому.</div>`;
     else if(L.steps.length===1)fin=`<div style="margin-top:6px">Забрати назад <b>нікому</b>${it.kind==='bad'?'':' — фігура висіла'}.</div>`;
     else fin='';
     fin+=bal>0?`<div style="margin-top:6px"><b>Підсумок: ${attWho} в плюсі на ${bal} ${plural(bal,'очко','очки','очок')}.</b></div>`:`<div style="margin-top:6px"><b>Підсумок: ${bal===0?'рівно, нічого не виграно':`${attWho} в мінусі на ${-bal}`} — тому забрати цю фігуру не вийде.</b></div>`;
@@ -3179,6 +3208,9 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '1.2.0':['🚀 Повний Stockfish у браузері тепер рахує на кількох ядрах процесора (якщо браузер це підтримує)',
+           '👁 «Бачення»: якщо фігура зв’язана, тренер показує це стрілками (хто зв’язує і з яким королем)',
+           '🛠 Виправлено запуск на ПК: більше немає дивних помилок у чорному вікні'],
   '1.1.0':['🔄 Синхронізація прогресу між ПК і телефоном: один раз підключаєш на ПК, а телефон — скануванням QR-коду',
            '🔒 QR-код захищений: розмитий, поки не натиснеш на нього 3 рази',
            '✏️ На Шляху нові намальовані іконки уроків замість емодзі'],
