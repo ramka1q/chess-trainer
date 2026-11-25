@@ -255,7 +255,7 @@ async function init3D(){
   let last=performance.now();
   let lastStep=0;
   const step=(now,maxDt)=>{lastStep=performance.now();if(!W3.on){last=now;return}const dt=Math.min(maxDt,(now-last)/1000)*W3.speed;last=now;for(const u of [...W3.upd])u(now,dt);frame(dt);R.render(scene,cam)};
-  const loop=now=>{requestAnimationFrame(loop);step(now,.05)};
+  const loop=now=>{requestAnimationFrame(loop);step(now,W3.base>1?.2:.05)}; /* mini events keep real time even on slow devices */
   requestAnimationFrame(loop);
   /* background tab: browsers pause requestAnimationFrame, so a timer finishes the cutscene (fast) */
   setInterval(()=>{if(W3.on&&performance.now()-lastStep>250){const n=performance.now();step(n,document.hidden?1:.25)}},100);
@@ -670,19 +670,19 @@ async function play3D(evk,X){
   if(!innerWidth||!innerHeight||rc.width<40)throw new Error('board not visible');W3.W=innerWidth;W3.H=innerHeight;W3.cx=rc.left+rc.width/2;W3.cy=rc.top+rc.height/2;
   W3.R.setSize(W3.W,W3.H,false);W3.cv.style.width=W3.W+'px';W3.cv.style.height=W3.H+'px';W3.cam.aspect=W3.W/W3.H;W3.cam.fov=35;W3.cam.updateProjectionMatrix();
   W3.d=8*W3.H/(rc.width*2*Math.tan(35*Math.PI/360));
-  W3.flip=X.flip;W3.speed=1;W3.cleanup=[];W3.onReturn=[];W3.floatCrown=null;W3.extra=[];W3.ice=[];W3.flash=0;W3.shake=0;W3.lvl=1;W3.wind=0;W3.lamp.userData.on=1;W3.skyTint=new T.Color(1,1,1);
+  W3.flip=X.flip;W3.base=X.speed||1;W3.speed=W3.base;W3.cleanup=[];W3.onReturn=[];W3.floatCrown=null;W3.extra=[];W3.ice=[];W3.flash=0;W3.shake=0;W3.lvl=1;W3.wind=0;W3.lamp.userData.on=1;W3.skyTint=new T.Color(1,1,1);
   W3.rainSpeed=38;W3.rainLen=1.1;W3.rain.material.color.setHex(0x9fb3d6);W3.rain.visible=true;W3.glass.visible=true;W3.frost.material.userData.base=0;W3.frost.material.opacity=0;
   W3.cup.rotation.set(0,0,0);W3.cup.position.set(6,-.3,2.2);W3.curt.forEach(c=>{c.rotation.set(0,0,0);c.position.z=-8.4});
   for(const k in W3.pcs)disposePiece(W3.pcs[k]);W3.pcs={};
   for(const[sq,p]of Object.entries(X.map0)){W3.pcs[sq]=makePiece(sq,p);if(X.crowns&&X.crowns.includes(sq))crownOn(W3.pcs[sq])}
   drawBoard({last:X.last});W3.C=cloneShot(shot('top'));W3.stand=0;setRoomAlpha(0);
-  const u=ui3();u.classList.remove('capOn');u.querySelector('.bo').style.opacity=0;
+  const u=ui3();u.classList.remove('capOn');u.querySelector('.bo').style.opacity=0;u.classList.toggle('mini',W3.base>1);
   W3.on=true;W3.cv.style.display='block';u.style.display='block';
   /* one frame identical to the 2D board, then hide the DOM board under it */
   await wait(30);X.hide2D(true);
   u.classList.add('on');
   /* lift off */
-  W3.speed=1;
+  W3.speed=W3.base;
   await Promise.all([camTo('board',1500),tween(900,e=>setRoomAlpha(e)),(async()=>{await wait(350);await tween(900,e=>W3.stand=e,easeO)})()]);
   if(evk!=='qcap')caption(X.cap||EVENTS[evk]);
   const needCh=['crow','ufo','ufoBack','watcher','meteor'];
@@ -702,7 +702,7 @@ async function play3D(evk,X){
   for(const k in W3.pcs){const o=W3.pcs[k];const w=sqW(k);o.own=false;o.lift=0;o.fall=0;o.alpha=1;o.x=w.x;o.z=w.z}
   const spins=Object.values(W3.pcs).map(o=>[o,o.spin%(Math.PI*2),o.tint]);
   drawBoard({last:null});W3.scene.fog=null;
-  W3.speed=Math.min(W3.speed,2);
+  W3.speed=Math.min(W3.speed,Math.max(2,W3.base));
   const crater=W3.crater;W3.crater=null;
   await Promise.all([
     camTo('top',1500),
@@ -722,7 +722,7 @@ async function play2D(evk,X){
   const u=ui3();u.style.display='block';u.classList.add('on');if(evk!=='qcap')caption(X.cap||EVENTS[evk]);if(evk==='qcap'){SFX.boom();await sleep(600)}
   const b=document.querySelector('#board');b.classList.add('wxShake');
   if(evk==='lightning'||evk==='meteor')SFX.thunder();else if(evk==='tornado'||evk==='fog')SFX.wind(3);else if(evk==='crow')SFX.caw();else if(evk.startsWith('ufo'))SFX.ufo();else if(evk==='quake')SFX.rumble();else if(evk==='rainbow')SFX.chime();else if(evk==='frost')SFX.freeze();
-  await sleep(2200);b.classList.remove('wxShake');u.classList.remove('capOn','on');u.style.display='none';
+  await sleep(X.speed>1?900:2200);b.classList.remove('wxShake');u.classList.remove('capOn','on');u.style.display='none';
 }
 
 /* ================= GAME RUN ================= */
@@ -735,6 +735,7 @@ const CSS=`
 #stormUi .cap{position:absolute;left:0;right:0;top:12vh;text-align:center;color:#fff;opacity:0;transform:translateY(-12px);transition:opacity .6s,transform .6s;text-shadow:0 2px 12px #000,0 0 3px #000}
 #stormUi.capOn .cap{opacity:1;transform:none}
 #stormUi .ci{font-size:54px;line-height:1} #stormUi .cn{font-size:34px;font-weight:900;letter-spacing:.12em;margin-top:6px} #stormUi .cd{font-size:15px;max-width:560px;margin:8px auto 0;opacity:.9;padding:0 16px}
+#stormUi.mini .skip,#stormUi.mini .cd{display:none}
 #stormUi .skip{position:absolute;right:16px;bottom:calc(9vh + 14px);pointer-events:auto;background:rgba(0,0,0,.55);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:6px;padding:7px 12px;font-weight:700;cursor:pointer}
 #stormUi .bo{position:absolute;inset:0;background:#000;opacity:0;transition:opacity .15s}
 .sq .wxFog{position:absolute;inset:-1px;z-index:4;background:rgba(214,219,224,.62);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);pointer-events:none}
@@ -755,7 +756,9 @@ const CSS=`
 `;
 let cssDone=false;function css(){if(cssDone)return;cssDone=true;const s=document.createElement('style');s.textContent=CSS;document.head.appendChild(s)}
 
-const FREQ={rare:['Рідко',[16,22]],normal:['Нормально',[10,16]],often:['Часто',[6,10]],chaos:['Хаос',[3,5]]};
+const FREQ={rare:['Рідко',[16,22]],normal:['Нормально',[10,16]],often:['Часто',[6,10]],chaos:['Хаос',[3,5]],every30:['Кожні 30 ходів',[60,60]]};
+const MINI=7;            /* weather cutscenes play this many times faster (about a second) */
+let GAL_FULL=false;      /* gallery switch: watch the slow full version */
 
 /* ================= ONLINE (PeerJS, browser-to-browser) =================
    The host decides all randomness (weather) and sends it to the guest, so both see the same thing. */
@@ -783,7 +786,7 @@ async function netJoin(code,onOk,onErr){
 }
 function guestStart(d){
   if(CUR&&CUR.stop)CUR.stop(true);CUR=null;closeModal();showMain();setNav('storm');
-  CUR=StormRun({mode:'net',host:false,color:d.color,freq:d.freq,forecast:d.forecast,nextAt:d.nextAt});
+  CUR=StormRun({mode:'net',host:false,color:d.color,freq:d.freq,forecast:d.forecast,nextAt:d.nextAt,showQ:d.showQ!==false});
 }
 
 function StormRun(opt){
@@ -798,12 +801,17 @@ function StormRun(opt){
   const gapR=FREQ[opt.freq][1];const gap=()=>gapR[0]+Math.floor(Math.random()*(gapR[1]-gapR[0]+1));
   let nextAt=opt.nextAt||Math.max(6,gap()),upcoming=null;
   const st={fog:0,fogR:null,frozen:{},ufo:null,secret:null,crowns:{...(opt.crowns||{})}};
+  const showQ=opt.showQ!==false&&!opt.gallery;
+  const H=[];            /* every move (fen before/after) and every weather event, for the review */
+  let RV=null;           /* review state while the post-game review is open */
+  $('#evalbar').style.visibility=showQ?'':'hidden';
   const log=[];const forecast=opt.forecast||makeForecast();
   board.clear();board.flip=human==='b';board.set(g);board.showDots=true;
   /* board hooks: frozen pieces cannot move, fog / ice / ufo marks drawn after every render */
   board.targets=function(from){if(st.frozen[from])return[];return Board.prototype.targets.call(this,from)};
   board.render=function(a){Board.prototype.render.call(this,a);decorate()};
   function decorate(){
+    if(RV)return;
     for(let i=0;i<64;i++){const sq=board.idxToSq(i),d=board.sqs[i];
       if(st.fog>0&&st.fogR&&+sq[1]>=st.fogR[0]&&+sq[1]<=st.fogR[1]){d.classList.add('fogd');d.insertAdjacentHTML('beforeend','<span class="wxFog"></span>')}
       if(st.frozen[sq])d.insertAdjacentHTML('beforeend','<span class="wxIce"></span>');
@@ -836,6 +844,7 @@ function StormRun(opt){
   function sendReady(){if(HOST)netSend({t:'ready',ply,fen:g.fen(),nextAt,upcoming})}
 
   function render(msg){
+    if(RV)return;
     const turnTxt=over?'':opt.mode==='friend'?`Хід ${g.turn()==='w'?'білих':'чорних'}`:g.turn()===human?(waitHost?'Синхронізація…':'Твій хід'):NETM?'Хід друга…':'Бот думає…';
     const eff=[];if(st.fog>0)eff.push(`🌫 туман: ще ${st.fog} півх.`);const fz=Object.keys(st.frozen);if(fz.length)eff.push(`❄ замерзли: ${fz.join(', ')}`);if(st.ufo)eff.push(`🛸 НЛО повернеться через ${Math.max(1,Math.ceil((st.ufo.at-ply)/2))} хід`);
     const left=Math.max(0,nextAt-ply);
@@ -851,12 +860,13 @@ function StormRun(opt){
     foot();
   }
   function foot(){
+    if(RV)return;
     if(over&&NETM){
       const alive=!!(NET.conn&&NET.conn.open);
-      $('#pf').innerHTML=(HOST&&alive?`<button class="btn" id="wxAgain">↻ Реванш (кольори міняються)</button>`:alive?`<div class="small mut" style="flex:1;align-self:center">Чекаємо, поки друг почне реванш…</div>`:'')+`<button class="btn g" id="wxMenu">Вийти</button>`;$('#pf').style.display='flex';
-      if($('#wxAgain'))$('#wxAgain').onclick=()=>{const fc=makeForecast(),na=Math.max(6,gap());netSend({t:'start',color:human,freq:opt.freq,forecast:fc,nextAt:na});stop(true);CUR=StormRun({...opt,color:other(human),forecast:fc,nextAt:na})};
-      $('#wxMenu').onclick=()=>showView('storm');return}
-    if(over){$('#pf').innerHTML=`<button class="btn" id="wxAgain">↻ Ще раз</button><button class="btn g" id="wxMenu">Налаштування</button>`;$('#pf').style.display='flex';$('#wxAgain').onclick=()=>{stopCur();CUR=StormRun(opt)};$('#wxMenu').onclick=()=>showView('storm');return}
+      $('#pf').innerHTML=`<button class="btn" id="wxRev">📈 Розбір</button>`+(HOST&&alive?`<button class="btn" id="wxAgain">↻ Реванш (кольори міняються)</button>`:alive?`<div class="small mut" style="flex:1;align-self:center">Чекаємо, поки друг почне реванш…</div>`:'')+`<button class="btn g" id="wxMenu">Вийти</button>`;$('#pf').style.display='flex';
+      if($('#wxAgain'))$('#wxAgain').onclick=()=>{const fc=makeForecast(),na=Math.max(6,gap());netSend({t:'start',color:human,freq:opt.freq,forecast:fc,nextAt:na,showQ:opt.showQ});stop(true);CUR=StormRun({...opt,color:other(human),forecast:fc,nextAt:na})};
+      $('#wxMenu').onclick=()=>showView('storm');$('#wxRev').onclick=openReview;return}
+    if(over&&!opt.gallery){$('#pf').innerHTML=`<button class="btn" id="wxRev">📈 Розбір партії</button><button class="btn g" id="wxAgain">↻ Ще раз</button><button class="btn g" id="wxMenu">Налаштування</button>`;$('#pf').style.display='flex';$('#wxAgain').onclick=()=>{stopCur();CUR=StormRun(opt)};$('#wxMenu').onclick=()=>showView('storm');$('#wxRev').onclick=openReview;return}
     if(opt.gallery){$('#pf').innerHTML=`<button class="btn" id="wxGal">🎬 Обрати анімацію</button><button class="btn g sm" id="wxGalX">Вийти</button>`;$('#pf').style.display='flex';$('#wxGal').onclick=()=>galleryPick();$('#wxGalX').onclick=()=>showView('storm');return}
     $('#pf').innerHTML=`${st.secret&&!st.secret.show?'<button class="btn g sm" id="wxReveal">👁 Показати, що змінилося</button>':''}${opt.mode==='friend'?'<button class="btn g sm" id="wxFlip">⇅ Перевернути</button>':''}<button class="btn g sm" id="wxResign">🏳 ${opt.mode==='friend'?'Закінчити':'Здатися'}</button>`;
     $('#pf').style.display='flex';
@@ -875,13 +885,14 @@ function StormRun(opt){
     if(over)return;over=true;busy=false;
     S.storm.games++;save();
     const ev=log.filter(x=>x.e).length;
-    let h=`<b>${txt}</b><div class="small mut" style="margin-top:4px">Подій погоди за партію: ${ev}.</div>`;
+    let h=`<b>${txt}</b><div class="small mut" style="margin-top:4px">Подій погоди за партію: ${ev}. Натисни «📈 Розбір», щоб побачити, як ти зіграв.</div>`;
     if(opt.mode==='bot'||NETM){if(winner===human){h='🏆 '+h;confetti&&confetti();addXP&&addXP(30,'Перемога в бурі')}else if(winner)h='😵 '+h}
     snd&&snd(winner?'win':'move');
     render({h,k:winner===human||!winner?'good':'bad'});
   }
   async function afterMove(mv,noAnim){
     busy=true;
+    {const fenA=g.fen();g.undo();const fenB=g.fen();g.move({from:mv.from,to:mv.to,promotion:mv.promotion});const h={fenB,fenA,mv};H.push(h);if(showQ)liveRate(h)}
     {const n=+g.fen().split(' ')[5];log.push({s:(mv.color==='w'?n+'.':(n-1)+'…')+' '+mv.san})}
     if(st.frozen[mv.to])delete st.frozen[mv.to];
     /* crowns follow their piece; a captured crown goes to the capturer */
@@ -895,7 +906,7 @@ function StormRun(opt){
     if(st.fog>0)st.fog--;
     if(st.secret&&ply>=st.secret.until)st.secret=null;
     if(mv.captured==='q'){const hadCrown=!!st.crownQ;st.crownQ=false;await queenCapture(mv,hadCrown);if(mv.piece==='p'||hadCrown)st.crowns[mv.to]=1;board.skipAnim=true}
-    board.last=[mv.from,mv.to];board.arrows=[];
+    board.last=[mv.from,mv.to];board.arrows=[];board.badge=null;
     if(stolen){st.crownHide=mv.to;board.render(noAnim?undefined:[mv.from,mv.to]);moveSound(mv,g);await crownSteal(capSq,mv.to);st.crownHide=null;st.crowns[mv.to]=1;board.render()}
     else{board.render(noAnim?undefined:[mv.from,mv.to]);moveSound(mv,g)}
     if(checkOver()){sendReady();return}
@@ -937,13 +948,13 @@ function StormRun(opt){
     if(k==='ufoBack')st.ufo=null;
     {const r0=$('#board').getBoundingClientRect();if(r0.top<0||r0.bottom>innerHeight){$('#board').scrollIntoView({block:'center'});await sleep(250)}}
     const rect=$('#board').getBoundingClientRect();
-    const ctx={...X,res,map0,flip:board.flip,last:board.last,rect,fogZ,crowns:Object.keys(st.crowns),hide2D:h=>{$('#board').style.visibility=h?'hidden':''}};
+    const ctx={...X,res,map0,flip:board.flip,last:board.last,rect,fogZ,crowns:Object.keys(st.crowns),speed:opt.gallery&&GAL_FULL?1:MINI,hide2D:h=>{$('#board').style.visibility=h?'hidden':''}};
     board.sel=null;board.render();
     try{await play3D(k,ctx)}catch(e){console.warn('storm 3D failed',e);$('#board').style.visibility='';try{W3.on=false;W3.cv&&(W3.cv.style.display='none');W3.ui&&(W3.ui.style.display='none')}catch(_){}await play2D(k,ctx)}
     if(!me.alive){$('#board').style.visibility='';return}
     /* apply */
     if(res.fen!==g.fen()){g=new Chess(res.fen);board.set(g)}
-    board.last=null;board.arrows=[];
+    board.last=null;board.arrows=[];board.badge=null;
     if(res.fog){st.fog=res.fog;st.fogR=fogR}
     if(res.freeze)res.freeze.forEach(s=>st.frozen[s]=4);
     if(res.ufo)st.ufo={p:res.ufo.p,at:ply+4};
@@ -953,7 +964,7 @@ function StormRun(opt){
     {const nc={};for(const k of Object.keys(st.crowns)){const mvd=res.ch.find(c=>c.t==='move'&&c.from===k);const kil=res.ch.find(c=>c.t==='kill'&&c.sq===k);if(kil)continue;nc[mvd?mvd.to:k]=1}st.crowns=nc}
     board.render();
     if(k!=='ufoBack'){S.storm.seen[k]=(S.storm.seen[k]||0)+1;save()}
-    log.push({e:`${ev.i} ${esc(res.note)}`});
+    log.push({e:`${ev.i} ${esc(res.note)}`});H.push({ev:k,i:ev.i,note:res.note,fen:g.fen()});
     render({h:`${ev.i} <b>${ev.n}</b><br>${esc(res.note)}`,k:res.miss?'':'warn'});
     if(checkOver())return;
     if(g.in_check())snd&&snd('check');
@@ -995,6 +1006,86 @@ function StormRun(opt){
     [523,659,784].forEach((f,i)=>tone(f,.4,{type:'triangle',g:.07,delay:i*.07}));
     im.remove();
   }
+  /* ---- engine helpers shared by the live badges and the review ---- */
+  const EVC={};
+  function evalFen(fen){
+    if(EVC[fen])return EVC[fen];
+    const t=new Chess(fen);
+    if(t.in_checkmate())return EVC[fen]=Promise.resolve({cp:-10000,best:null,second:null});
+    if(t.game_over())return EVC[fen]=Promise.resolve({cp:0,best:null,second:null});
+    return EVC[fen]=coachE.analyse(fen,{depth:12,time:350,multipv:2}).then(a=>({cp:a.cp,best:a.best,second:a.lines[1]?a.lines[1].cp:null})).catch(()=>{delete EVC[fen];return null});
+  }
+  async function rateMove(h){
+    if(h.R!==undefined)return h.R;
+    const[b,a]=await Promise.all([evalFen(h.fenB),evalFen(h.fenA)]);
+    if(!b||!a)return h.R=null;
+    const cb=b.cp;let ca=mUci(h.mv)===b.best?cb:-a.cp;
+    const drop=cb-ca;const caN=drop>45?ca+45:cb;
+    let c;try{c=classifyMove(h.fenB,h.mv,cb,mUci(h.mv)===b.best?cb:caN,b.best,b.second)}catch(e){c=null}
+    return h.R={cb,s:ca,e:h.mv.color==='w'?ca:-ca,b:b.best,sc:b.second,c};
+  }
+  async function liveRate(h){
+    const R=await rateMove(h);if(!R||!R.c||!me.alive||RV)return;
+    if(board.g.fen()===h.fenA&&board.last&&board.last[0]===h.mv.from&&board.last[1]===h.mv.to){board.badge={sq:h.mv.to,cls:R.c};board.skipAnim=true;board.render()}
+  }
+
+  /* ---- post-game review: how well each side played, move by move ---- */
+  async function openReview(){
+    if(RV)return;RV={idx:-1,tok:0};const myRV=RV;
+    const moves=H.filter(x=>x.mv);
+    const back=()=>{RV=null;document.removeEventListener('keydown',RVkey);board.badge=null;board.arrows=[];g&&board.set(g);render()};
+    const RVkey=e=>{if(!RV||!RV.ready)return;if(e.key==='ArrowLeft'){step(-1);e.preventDefault()}if(e.key==='ArrowRight'){step(1);e.preventDefault()}};
+    myRV.back=back;
+    $('#pf').innerHTML=`<button class="btn g" id="rvBack">← Назад</button>`;$('#pf').style.display='flex';$('#rvBack').onclick=back;
+    for(let i=0;i<moves.length;i++){
+      if(RV!==myRV||!me.alive)return;
+      $('#pb').innerHTML=`<div class="card"><h4>📈 Розбір партії</h4><div class="small mut">Тренер аналізує хід ${i+1} з ${moves.length}…</div><div class="tbar" style="margin-top:8px"><i style="width:${Math.round(i/moves.length*100)}%;background:var(--green)"></i></div></div>`;
+      await rateMove(moves[i]);
+    }
+    if(RV!==myRV||!me.alive)return;
+    const mvs=moves.map(m=>m.mv),rev=moves.map(m=>m.R);
+    let CC=[];try{CC=ccClassify(mvs,rev)}catch(e){CC=rev.map(()=>'')}
+    RV.CL=moves.map((m,i)=>{const R=rev[i];if(!R)return null;const c=CC[i];if(c)return c;if(['mistake','blunder','miss'].includes(R.c))return'inaccuracy';return R.c==='book'?'best':R.c});
+    RV.moves=moves;RV.ready=true;
+    const acc=col=>{const a=[];moves.forEach(m=>{if(m.mv.color!==col||!m.R)return;const x=50+50*wc(m.R.cb),y=50+50*wc(m.R.s);a.push(Math.max(0,Math.min(100,103.1668*Math.exp(-0.04354*Math.max(0,x-y))-3.1669)))});return a.length?Math.round(a.reduce((p,q)=>p+q,0)/a.length):null};
+    RV.acc={w:acc('w'),b:acc('b')};
+    document.addEventListener('keydown',RVkey);
+    S.storm.lastAcc=human?RV.acc[human]:null;save();
+    showRV();
+  }
+  function step(d){if(!RV||!RV.ready)return;RV.idx=Math.max(-1,Math.min(RV.moves.length-1,RV.idx+d));showRV()}
+  function showRV(){
+    const moves=RV.moves,CL=RV.CL,i=RV.idx;
+    const keys=['brilliant','great','best','excellent','good','book','inaccuracy','mistake','miss','blunder'];
+    const cnt=(col,k)=>CL.filter((c,j)=>c===k&&moves[j].mv.color===col).length;
+    const nameOf=col=>opt.mode==='friend'?(col==='w'?'Білі':'Чорні'):col===human?'Ти':(NETM?'Друг':'Бот');
+    /* board */
+    if(i<0){board.set(new Chess(moves[0]?moves[0].fenB:undefined));board.last=null;board.badge=null;board.arrows=[];board.render()}
+    else{const m=moves[i],c=CL[i];const t=new Chess(m.fenA);board.g=t;board.sel=null;board.last=[m.mv.from,m.mv.to];board.badge=c&&CLS[c]?{sq:m.mv.to,cls:c}:null;board.arrows=[];
+      if(m.R&&m.R.b&&m.R.b!==mUci(m.mv)&&['inaccuracy','mistake','blunder','miss','good'].includes(c))board.arrows.push({from:m.R.b.slice(0,2),to:m.R.b.slice(2,4),c:'g'});
+      board.skipAnim=true;board.render()}
+    /* move list with weather events between the moves */
+    let html='',k=0;
+    for(const x of H){
+      if(x.ev){html+=`<div class="e">${x.i} ${esc(x.note)}</div>`;continue}
+      const j=k++;const c=CL[j];const B=c&&CLS[c];const n=+x.fenB.split(' ')[5];
+      html+=`<span class="rvm ${j===i?'on':''}" data-j="${j}" style="cursor:pointer;padding:1px 4px;border-radius:4px;white-space:nowrap;${j===i?'background:#4b4847':''}">${x.mv.color==='w'?n+'.':''}${B?`<b style="color:${B.c}">${B.s}</b> `:''}${esc(x.mv.san)}</span> `;
+    }
+    const m=i>=0?moves[i]:null,c=m?CL[i]:null;
+    let note='Натисни на хід або гортай стрілками ← →.';
+    if(m&&c&&CLS[c]){const bestSan=m.R&&m.R.b&&m.R.b!==mUci(m.mv)?sanOf(m.fenB,m.R.b):null;
+      note=`<b style="color:${CLS[c].c}">${CLS[c].s} ${esc(m.mv.san)}: ${CLS[c].n}</b>${bestSan&&['inaccuracy','mistake','blunder','miss','good'].includes(c)?`<br>Найкраще було <b>${esc(bestSan)}</b> (зелена стрілка).`:''}`}
+    $('#pb').innerHTML=`<div class="card"><h4>📈 Розбір партії</h4>
+      <div class="row" style="gap:10px">${['w','b'].map(col=>`<div style="flex:1;text-align:center;background:var(--panel2);border-radius:8px;padding:8px"><div class="small mut">${nameOf(col)} (${col==='w'?'білі':'чорні'})</div><div class="big">${RV.acc[col]==null?'—':RV.acc[col]+'%'}</div><div class="small dim">точність</div></div>`).join('')}</div>
+      <div style="margin-top:8px">${keys.filter(k=>cnt('w',k)||cnt('b',k)).map(k=>`<div class="small row" style="justify-content:space-between;margin:2px 0"><span style="width:28px;text-align:center">${cnt('w',k)}</span><span><b style="color:${CLS[k].c}">${CLS[k].s}</b> ${CLS[k].n}</span><span style="width:28px;text-align:center">${cnt('b',k)}</span></div>`).join('')}</div></div>
+      <div class="card small">${note}</div>
+      <div class="card"><div class="wxLog" style="max-height:220px">${html}</div></div>`;
+    document.querySelectorAll('.rvm').forEach(e=>e.onclick=()=>{RV.idx=+e.dataset.j;showRV()});
+    const on=document.querySelector('.rvm.on');if(on)on.scrollIntoView({block:'nearest'});
+    $('#pf').innerHTML=`<button class="btn g sm" id="rvBack">← Назад</button><button class="btn g sm" id="rvS">⏮</button><button class="btn g sm" id="rvP">◀</button><button class="btn sm" id="rvN">▶</button><button class="btn g sm" id="rvE">⏭</button>`;$('#pf').style.display='flex';
+    $('#rvBack').onclick=RV.back;$('#rvS').onclick=()=>{RV.idx=-1;showRV()};$('#rvP').onclick=()=>step(-1);$('#rvN').onclick=()=>step(1);$('#rvE').onclick=()=>{RV.idx=RV.moves.length-1;showRV()};
+  }
+
   function W3flipZ(rank){/* rank 1..8 → world z of that rank's centre (for fog planes) */const r=rank-1;return board.flip?r-3.5:3.5-r}
 
   async function botMove(){
@@ -1012,7 +1103,7 @@ function StormRun(opt){
     afterMove(mv);
   }
   me._ev=(k,p)=>{if(busy||over||(NETM&&!HOST))return'busy';runEvent(k,{ufoP:p||{type:'n',color:'w'}}).then(()=>{busy=false;render();sendReady();if(opt.mode==='bot'&&g.turn()!==human&&!over)botMove()});return'ok'};
-  function stop(keepNet){me.alive=false;delete board.targets;delete board.render;$('#board').style.visibility='';board.arrows=[];
+  function stop(keepNet){me.alive=false;$('#evalbar').style.visibility='';if(RV&&RV.back){const b=RV.back;RV=null;try{b()}catch(e){}}delete board.targets;delete board.render;$('#board').style.visibility='';board.arrows=[];
     if(W3.on){W3.speed=20}
     if(NETM&&!keepNet){netSend({t:'bye'});netClose()}}
 
@@ -1028,7 +1119,7 @@ window.viewStorm=function(){
   css();loadThree().catch(()=>{});
   board.clear();board.flip=false;board.set(new Chess());board.canMove=()=>false;
   S.storm=S.storm||{games:0,seen:{}};
-  let mode=S.stormMode||'bot',lvl=S.playLevel??1,col='w',freq=S.stormFreq||'normal',autoFlip=!!S.stormFlip;
+  let mode=S.stormMode||'bot',lvl=S.playLevel??1,col='w',freq=S.stormFreq||'normal',autoFlip=!!S.stormFlip,showQ=S.stormQ!==false;
   players(plHtml(mode==='bot'?'Бот':'Друг','','b'),plHtml('Ти','','w'));
   function ui(){
     const seen=S.storm.seen||{};
@@ -1040,7 +1131,8 @@ window.viewStorm=function(){
       ${mode==='net'?`<div class="card"><h4>Твій колір</h4><div class="chips">${[['w','Білі'],['b','Чорні'],['r','Випадково']].map(([k,n])=>`<button class="chip ${col===k?'on':''}" data-c="${k}">${n}</button>`).join('')}</div>
         <div class="small mut" style="margin-top:8px">Натисни «Створити запрошення», надішли посилання другу (Telegram, Discord…). Коли він його відкриє, партія почнеться сама. Не закривай цю сторінку, поки чекаєш.</div></div>`:''}
       <div class="card"><h4>Як часто змінюється погода</h4><div class="chips">${Object.entries(FREQ).map(([k,[n,r]])=>`<button class="chip ${freq===k?'on':''}" data-f="${k}">${n}</button>`).join('')}</div>
-        <div class="small mut" style="margin-top:6px">Приблизно кожні ${Math.round(FREQ[freq][1][0]/2)}–${Math.round(FREQ[freq][1][1]/2)} ходів.</div></div>
+        <div class="small mut" style="margin-top:6px">${FREQ[freq][1][0]===FREQ[freq][1][1]?`Рівно кожні ${FREQ[freq][1][0]/2} ходів.`:`Приблизно кожні ${Math.round(FREQ[freq][1][0]/2)}–${Math.round(FREQ[freq][1][1]/2)} ходів.`}</div></div>
+      <div class="card"><label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer"><input type="checkbox" id="wxQ" ${showQ?'checked':''} style="margin-top:3px"><span><b>📊 Показувати оцінку ходів під час гри</b><div class="small mut">Значки (!!, ★, ?, ??) на кожному ході й смужка переваги збоку.${mode==='net'?' Обираєш ти як господар: у друга буде так само.':''} Розбір партії після гри доступний завжди.</div></span></label></div>
       <div class="card"><h4>📖 Можлива погода</h4>${POOL.map(k=>`<div class="wxEv" style="${seen[k]?'':'opacity:.75'}"><span class="i">${EVENTS[k].i}</span><div style="flex:1"><b>${EVENTS[k].n}</b> <span class="tag" style="background:${RAR[EVENTS[k].rar].col};color:#111">${RAR[EVENTS[k].rar].n}</span>${seen[k]?` <span class="small dim">бачив ×${seen[k]}</span>`:''}<div class="small mut">${EVENTS[k].d}</div></div></div>`).join('')}</div>`,
       mode==='net'?`<button class="btn" id="wxInvite">🔗 Створити запрошення</button>`:`<button class="btn" id="wxStart">🌪 Грати</button>`);
     coachSay('Звичайні шахи на звичайній дошці. Але раз на кілька ходів камера відривається від дошки, фігури встають, і за вікном щось починається. Перед кожною партією по радіо дають прогноз: 4 види погоди, які можуть трапитися.');
@@ -1048,15 +1140,16 @@ window.viewStorm=function(){
     document.querySelectorAll('[data-lv]').forEach(e=>e.onclick=()=>{lvl=+e.dataset.lv;ui()});
     document.querySelectorAll('[data-c]').forEach(e=>e.onclick=()=>{col=e.dataset.c;ui()});
     document.querySelectorAll('[data-f]').forEach(e=>e.onclick=()=>{freq=e.dataset.f;S.stormFreq=freq;save();ui()});
+    $('#wxQ').onchange=e=>{showQ=e.target.checked;S.stormQ=showQ;save()};
     if($('#wxAF'))$('#wxAF').onchange=e=>{autoFlip=e.target.checked;S.stormFlip=autoFlip;save()};
-    if($('#wxStart'))$('#wxStart').onclick=()=>{panel('🌪 Шахи-Буря','','');CUR=StormRun({mode,level:lvl,color:col,freq,autoFlip})};
-    if($('#wxInvite'))$('#wxInvite').onclick=()=>hostWait(col,freq);
+    if($('#wxStart'))$('#wxStart').onclick=()=>{panel('🌪 Шахи-Буря','','');CUR=StormRun({mode,level:lvl,color:col,freq,autoFlip,showQ})};
+    if($('#wxInvite'))$('#wxInvite').onclick=()=>hostWait(col,freq,showQ);
   }
   ui();
 };
 
 /* host: create an invite link and wait for the friend */
-function hostWait(col,freq){
+function hostWait(col,freq,showQ){
   const myC=col==='r'?(Math.random()<.5?'w':'b'):col;
   const show=(html,foot)=>panel('🌐 Запрошення',`<div id="coachBox"></div>${html}`,foot||`<button class="btn g" id="wxCancel">Скасувати</button>`);
   const bindCancel=()=>{if($('#wxCancel'))$('#wxCancel').onclick=()=>{netClose();showView('storm')}};
@@ -1076,11 +1169,11 @@ function hostWait(col,freq){
     if($('#wxShare'))$('#wxShare').onclick=()=>navigator.share({title:'Шахи-Буря',text:'Зіграймо в Шахи-Бурю! 🌪',url:link}).catch(()=>{});
   },()=>{
     const fc=makeForecast(),na=Math.max(6,FREQ[freq][1][0]+Math.floor(Math.random()*(FREQ[freq][1][1]-FREQ[freq][1][0]+1)));
-    netSend({t:'start',color:other(myC),freq,forecast:fc,nextAt:na});
+    netSend({t:'start',color:other(myC),freq,forecast:fc,nextAt:na,showQ});
     snd&&snd('good');
     if(CUR&&CUR.stop)CUR.stop(true);CUR=null;panel('🌪 Шахи-Буря','','');
-    CUR=StormRun({mode:'net',host:true,color:myC,freq,forecast:fc,nextAt:na});
-  },e=>{show(`<div class="card" style="border:2px solid var(--red)">${esc(netErr(e))}</div>`,`<button class="btn" id="wxRetry">Спробувати ще раз</button><button class="btn g" id="wxCancel">Назад</button>`);bindCancel();$('#wxRetry').onclick=()=>hostWait(col,freq)}).catch(()=>{show(`<div class="card" style="border:2px solid var(--red)">Не вдалося завантажити модуль гри по мережі. Перевір інтернет.</div>`);bindCancel()});
+    CUR=StormRun({mode:'net',host:true,color:myC,freq,forecast:fc,nextAt:na,showQ});
+  },e=>{show(`<div class="card" style="border:2px solid var(--red)">${esc(netErr(e))}</div>`,`<button class="btn" id="wxRetry">Спробувати ще раз</button><button class="btn g" id="wxCancel">Назад</button>`);bindCancel();$('#wxRetry').onclick=()=>hostWait(col,freq,showQ)}).catch(()=>{show(`<div class="card" style="border:2px solid var(--red)">Не вдалося завантажити модуль гри по мережі. Перевір інтернет.</div>`);bindCancel()});
 }
 
 /* ================= SECRET ANIMATION GALLERY =================
@@ -1102,7 +1195,9 @@ function galleryPick(){
     <h4 style="margin:4px 0 6px">💥 Взяття ферзя</h4><div class="list">${caps.map(p=>`<div class="it" data-gq="${p}"><img src="${PIC('w',p)}" width="28"><span class="nm">${QCAP[p].n}</span><span class="tag" style="background:var(--gold);color:#111">${'★'.repeat(QTIER[p])}${'☆'.repeat(4-QTIER[p])}</span></div>`).join('')}</div>
     <h4 style="margin:12px 0 6px">👑 Корона</h4><div class="list"><div class="it" data-gc="1"><img src="${CROWN_SVG}" width="28"><span class="nm">Хтось збиває пішака з короною і забирає її</span></div></div>
     <h4 style="margin:12px 0 6px">🌪 Погода</h4><div class="list">${list.map(k=>`<div class="it" data-gk="${k}"><span style="font-size:22px;width:30px;text-align:center">${EVENTS[k].i}</span><span class="nm">${EVENTS[k].n}${k==='ufoBack'?' (повернення)':''}</span><span class="tag" style="background:${RAR[EVENTS[k].rar].col};color:#111">${RAR[EVENTS[k].rar].n}</span></div>`).join('')}</div></div>
+    <label class="small" style="display:flex;gap:6px;margin-top:10px;cursor:pointer;text-align:left"><input type="checkbox" id="galFull" ${GAL_FULL?'checked':''}> 🐢 Погода: повна повільна версія (у грі вона коротка, ~1 сек)</label>
     <button class="btn g" style="width:100%;margin-top:10px" onclick="closeModal()">Закрити</button>`);
+  $('#galFull').onchange=e=>{GAL_FULL=e.target.checked};
   document.querySelectorAll('[data-gk]').forEach(e=>e.onclick=()=>{closeModal();galleryRun(GAL_FEN,r=>r._ev(e.dataset.gk,{type:'b',color:'b'}))});
   document.querySelectorAll('[data-gq]').forEach(e=>e.onclick=()=>{closeModal();const d=CAPDEMO[e.dataset.gq];galleryRun(d.fen,r=>r._mv(d.m[0],d.m[1]))});
   document.querySelectorAll('[data-gc]').forEach(e=>e.onclick=()=>{closeModal();galleryRun('4k3/pp4pp/4p3/3P4/8/8/PP4PP/4K3 b - - 0 1',r=>r._mv('e6','d5'),{d5:1})});

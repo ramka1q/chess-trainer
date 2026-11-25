@@ -238,7 +238,7 @@ button{font-family:inherit}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="pieces.js"></script>
 <script src="masters.js"></script>
-<script src="storm.js?v=1.5.0" defer></script>
+<script src="storm.js?v=1.6.0" defer></script>
 <script>
 "use strict";
 /* ================= UTIL ================= */
@@ -700,7 +700,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='1.5.0';
+const APP_VERSION='1.6.0';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -3210,6 +3210,10 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '1.6.0':['📈 Шахи-Буря: після партії є розбір: точність обох гравців, значки кожного ходу й найкращі ходи',
+           '📊 Перед грою можна вибрати, чи показувати значки ходів і смужку переваги (по мережі вибирає господар)',
+           '⏱ Нова частота погоди: рівно кожні 30 ходів',
+           '⚡ Події погоди тепер короткі, приблизно секунда (повну версію можна глянути в секретній галереї)'],
   '1.5.0':['👑 Пішак, що збив ферзя, назавжди отримує 3D-корону, яка крутиться над ним (просто для краси)',
            '✨ Якщо фігуру з короною збивають, корона злітає й перестрибує на того, хто її збив'],
   '1.4.2':['🛠 Оновлення тепер завжди підтягує свіжі файли (раніше браузер міг тримати старий режим Шахи-Буря)'],
