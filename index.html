@@ -271,8 +271,8 @@ body.wood .sq.d.hl{background-image:linear-gradient(rgba(170,190,40,.5),rgba(170
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="pieces.js"></script>
 <script src="masters.js"></script>
-<script src="storm.js?v=2.0.0" defer></script>
-<script src="icons.js?v=2.0.0" defer></script>
+<script src="storm.js?v=2.0.1" defer></script>
+<script src="icons.js?v=2.0.1" defer></script>
 <script>
 "use strict";
 /* ================= UTIL ================= */
@@ -847,7 +847,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='2.0.0';
+const APP_VERSION='2.0.1';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -3007,7 +3007,7 @@ const SITE_URL='https://ramka1q.github.io/chess-trainer/';
 var SY={};try{SY=JSON.parse(localStorage.getItem(SYNC_KEY)||'{}')}catch(e){}
 const saveSY=()=>{try{localStorage.setItem(SYNC_KEY,JSON.stringify(SY))}catch(e){}};
 /* settings that belong to one device only */
-const LOCAL_ONLY=['devChoice','autoFull','autoEng','noMulti','sound','engineMode','skipVer','lastSeenVer','welcomed','visLvl','calcLvl','clk','cctOn','site','nick','impN'];
+const LOCAL_ONLY=['pcFullSet','devChoice','autoFull','autoEng','noMulti','sound','engineMode','skipVer','lastSeenVer','welcomed','visLvl','calcLvl','clk','cctOn','site','nick','impN'];
 function gh(path,opt={}){return fetch('https://api.github.com'+path,{...opt,headers:{Authorization:'Bearer '+SY.token,Accept:'application/vnd.github+json',...(opt.body?{'Content-Type':'application/json'}:{})}})}
 function packState(){
   const o={};for(const k in S)if(!LOCAL_ONLY.includes(k))o[k]=S[k];
@@ -3390,6 +3390,7 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '2.0.1':['💻 На компʼютері одразу працює повний Stockfish 19, без перевірок і без вікна з перезавантаженням'],
   '2.0.0':['🧠 Stockfish оновлено з 17.1 до 19: найновіша версія для браузера. Легка тепер важить лише 2 МБ, повна ~100 МБ. Старі файли 17.1 видаляються з пристрою самі'],
   '1.9.3':['🛠 Питання «Твій пристрій потужний?» більше не повторюється: зберігається з першого разу, а на компʼютері його взагалі не буде (компʼютер перевіряється сам)'],
   '1.9.2':['🛠 Виправлено розфарбовку дошки: кутова клітинка a1 тепер темна, і ферзь стоїть на своєму кольорі (зелена й деревʼяна дошка)'],
@@ -3447,7 +3448,9 @@ applyTheme(S.boardTheme||'green');
 setTimeout(function tryAuto(){if(document.visibilityState==='visible')autoEngineCheck();else setTimeout(tryAuto,20000)},20000);
 {const afterDev=()=>{if(!S.elo)setTimeout(()=>askElo(true),300);else setTimeout(showWhatsNew,700)};
  const isPhone=(window.matchMedia&&matchMedia('(pointer:coarse)').matches)||innerWidth<760;
- const afterTheme=()=>{if(S.devChoice)afterDev();else if(isPhone)setTimeout(()=>askDevice(afterDev),300);else{S.devChoice='auto';save();afterDev()}};
+ /* computers simply use the full engine (no question, no pop-up); phones are asked once */
+ const afterTheme=()=>{if(!isPhone&&S.devChoice!=='full'&&S.devChoice!=='lite'&&!S.pcFullSet){S.pcFullSet=true;setDevice('full');S.autoEng.why='компʼютер';save()}
+   if(S.devChoice)afterDev();else if(isPhone)setTimeout(()=>askDevice(afterDev),300);else afterDev()};
  if(!S.boardTheme)setTimeout(()=>askBoard(afterTheme),300);else afterTheme();}
 </script>
 </body>
