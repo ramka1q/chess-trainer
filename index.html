@@ -271,8 +271,8 @@ body.wood .sq.d.hl{background-image:linear-gradient(rgba(170,190,40,.5),rgba(170
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="pieces.js"></script>
 <script src="masters.js"></script>
-<script src="storm.js?v=1.8.2" defer></script>
-<script src="icons.js?v=1.8.2" defer></script>
+<script src="storm.js?v=1.9.0" defer></script>
+<script src="icons.js?v=1.9.0" defer></script>
 <script>
 "use strict";
 /* ================= UTIL ================= */
@@ -600,7 +600,7 @@ const mtThreads=()=>Math.max(2,Math.min(8,(navigator.hardwareConcurrency||4)-1))
 let SF17_FAIL=false;const SF_BLOBS={};
 let PRELOAD=null;
 if(navigator.storage&&navigator.storage.persist)navigator.storage.persisted().then(p=>{if(!p)navigator.storage.persist().catch(()=>{})}).catch(()=>{});
-function preloadEngine(full,multi){
+function preloadEngine(full,multi,silent){
   const key=multi?'multi':full?'full':'lite';PRELOAD=PRELOAD||{};
   if(!PRELOAD[key])PRELOAD[key]=(async()=>{
     const base=(multi?SF17M_WASM:full?SF17F_WASM:SF17_WASM).replace(/\.wasm$/,'');
@@ -614,7 +614,7 @@ function preloadEngine(full,multi){
       const r=await fetch(u);if(!r.ok||!r.body){continue}
       const rd=r.body.getReader();const parts=[];
       while(true){const{done:d,value}=await rd.read();if(d)break;done+=value.length;parts.push(value);
-        if(!shown&&Date.now()-t0>400)shown=true;
+        if(!shown&&!silent&&Date.now()-t0>400)shown=true;
         if(shown)showDl(`⬇ Завантажую Stockfish ${full?'(повний)':''}: ${(done/1048576).toFixed(1)} / ${(total/1048576).toFixed(0)} МБ <span class="dim">· лише перший раз</span>`,done/total*100)}
       /* keep it on the device right away (even before the offline helper is active) */
       if(LIB)await LIB.put(u,new Response(new Blob(parts),{headers:{'Content-Type':'application/wasm'}})).catch(()=>{});
@@ -647,7 +647,7 @@ class Engine{
       if(this.kind==='sf17'&&!SF17_FAIL){
         try{
           /* only the coach (analysis) gets the big engine; eval bar and bots use the light one, so memory stays low */
-          const full=engineMode()==='full'&&this.slot==='coach';const multi=full&&canMulti();this.multi=multi;
+          const full=(engineMode()==='full'||(engineMode()==='auto'&&S.autoFull===true))&&this.slot==='coach';const multi=full&&canMulti();this.multi=multi;this.full=full;
           await preloadEngine(full,multi);
           /* the multi-core build must run from our own origin (it starts helper workers from its own URL) */
           const u=multi?'stockfish-mt.js':await sf17Blob(full?SF17F_JS:SF17_JS);this.w=new Worker(u+'#'+encodeURIComponent(multi?SF17M_WASM:full?SF17F_WASM:SF17_WASM));
@@ -661,6 +661,8 @@ class Engine{
           this.name=multi&&this.slot==='coach'?`Stockfish 17.1 NNUE (повний, ${mtThreads()} ${plural(mtThreads(),'ядро','ядра','ядер')})`:full?'Stockfish 17.1 NNUE (повний, браузер)':'Stockfish 17.1 NNUE (браузер)';return;
         }catch(e){
           if(this.multi&&!S.noMulti){console.warn('multi-core engine failed, using single-core',e);S.noMulti=true;save();try{this.w&&this.w.terminate()}catch(_){}this.ls=[];this.ready=null;return this.init()}
+          /* the automatic choice turned out too heavy after all: go back to the light engine for good */
+          if(this.full&&engineMode()==='auto'&&S.autoFull){console.warn('full engine failed, back to the light one',e);S.autoFull=false;S.autoEng={v:AUTO_V,res:'lite',why:'повний рушій не запустився',at:Date.now()};save();try{this.w&&this.w.terminate()}catch(_){}this.ls=[];this.ready=null;return this.init()}
           console.warn('Stockfish 17 failed, falling back to 10',e);SF17_FAIL=true;try{this.w&&this.w.terminate()}catch(_){}this.ls=[]}
       }
       const u=await sfBlob();this.w=new Worker(u);this.name='Stockfish 10';
@@ -737,6 +739,55 @@ async function runEval(){
   }catch(e){}
   EV.busy=false;if(EV.want)runEval();
 }
+/* ---- automatic engine choice ----
+   Everyone starts with the light engine (7 MB). Later, in the background, the device is tested:
+   memory, cores, and how fast the light engine counts. A strong device then downloads the full engine
+   (~80 MB, silently, also on mobile data) and runs it once; if it starts and counts fine, the coach
+   uses it from the next visit. Otherwise the light one stays and the big files are deleted again. */
+const AUTO_V=1;let AUTOCHK=false;
+async function benchWorker(full,multi,ms){
+  const wasm=multi?SF17M_WASM:full?SF17F_WASM:SF17_WASM;
+  const u=multi?'stockfish-mt.js':await sf17Blob(full?SF17F_JS:SF17_JS);
+  const w=new Worker(u+'#'+encodeURIComponent(wasm));const t0=Date.now();
+  let nps=0,init=0,res;const done=new Promise(r=>res=r);
+  w.onmessage=e=>{const l=typeof e.data==='string'?e.data:'';const m=l.match(/ nps (\d+)/);if(m)nps=+m[1];
+    if(l==='uciok'){init=Date.now()-t0;if(multi)w.postMessage('setoption name Threads value '+mtThreads());w.postMessage('position startpos');w.postMessage('go movetime '+ms)}
+    if(l.startsWith('bestmove'))res(true)};
+  w.postMessage('uci');
+  const ok=await Promise.race([done,sleep(full?90000:20000).then(()=>false)]);
+  try{w.terminate()}catch(e){}
+  return ok&&nps?{nps,init}:null;
+}
+async function dropFullFiles(multi){
+  try{const c=await caches.open('trainer-libs-v1');const base=(multi?SF17M_WASM:SF17F_WASM).replace(/\.wasm$/,'');for(let i=0;i<6;i++)await c.delete(`${base}-part-${i}.wasm`)}catch(e){}
+  if(PRELOAD){delete PRELOAD.full;delete PRELOAD.multi}
+}
+async function autoEngineCheck(force){
+  if(engineMode()!=='auto'||AUTOCHK)return;
+  if(await nativeAvailable())return;
+  if(!force&&S.autoEng&&S.autoEng.v===AUTO_V)return;
+  AUTOCHK=true;S.autoEng={v:0,res:'checking'};
+  const fin=(res,why,extra={})=>{S.autoEng={v:AUTO_V,res,why,at:Date.now(),...extra};S.autoFull=res==='full';save();AUTOCHK=false;
+    if($('#autoEngBox'))viewSettings();return res};
+  try{
+    const mem=navigator.deviceMemory,cores=navigator.hardwareConcurrency||2;
+    if(mem&&mem<4)return fin('lite',`замало памʼяті (${mem} ГБ)`);
+    if(cores<4)return fin('lite',`замало ядер процесора (${cores})`);
+    const lite=await benchWorker(false,false,1500);
+    if(!lite)return fin('lite','легкий рушій не відповів');
+    if(lite.nps<250000)return fin('lite',`пристрій рахує повільно (${Math.round(lite.nps/1000)} тис. позицій/с)`,{nps:lite.nps});
+    const multi=canMulti();
+    await preloadEngine(true,multi,true);
+    const full=await benchWorker(true,multi,2000);
+    if(!full||full.init>30000){await dropFullFiles(multi);return fin('lite','повний рушій запускається надто довго',{nps:lite.nps})}
+    const r=fin('full',`потужний пристрій (${Math.round(lite.nps/1000)} тис. позицій/с)`,{nps:lite.nps,fullNps:full.nps});
+    /* a better engine is ready: offer to reload right now */
+    if(coachE.full){}else if($('#modal').style.display!=='flex')modal(`<h2>🧠 Знайшов кращу можливість!</h2><p>Твій пристрій потягне <b>повний Stockfish</b>: він сильніший і точніше аналізує ходи. Щоб тренер почав ним думати, треба перезавантажити сайт.</p>
+      <div class="row" style="gap:8px;margin-top:12px"><button class="btn" id="aeReload" style="flex:1">🔄 Перезавантажити</button><button class="btn g" style="flex:1" onclick="closeModal()">Пізніше</button></div>`),$('#aeReload').onclick=()=>location.reload();
+    else toast('🧠 Знайшов кращу можливість: повний Stockfish. Перезавантаж сайт, щоб увімкнути',6000);
+    return r;
+  }catch(e){AUTOCHK=false;S.autoEng=null}
+}
 function engineWarm(){coachE.init().catch(()=>{});botE.init().catch(()=>{});evalE.init().catch(()=>{})}
 
 /* ================= UI HELPERS ================= */
@@ -778,7 +829,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='1.8.2';
+const APP_VERSION='1.9.0';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -3182,11 +3233,17 @@ function viewSettings(){
       <button class="thOpt" data-th="green" style="${th==='green'?'border-color:var(--green)':''}">${themePreview('green')}🟩 Зелена ${th==='green'?'✓':''}</button>
       <button class="thOpt" data-th="wood" style="${th==='wood'?'border-color:var(--green)':''}">${themePreview('wood')}🪵 Деревʼяна ${th==='wood'?'✓':''}</button></div></div>
     <div class="card"><div class="row" style="justify-content:space-between;gap:12px"><div><h4 style="margin:0">🌪 Шахи-Буря</h4><div class="small mut" style="margin-top:4px">Режим, де погода змінює партію. За замовчуванням вимкнено: увімкни, і в меню зʼявиться таємнича вкладка.</div></div>${sw('setStorm',S.stormOn===true)}</div></div>
+    <div class="card" id="autoEngBox"><h4 style="margin:0">🧠 Stockfish на цьому пристрої</h4><div class="small mut" style="margin-top:6px">${(()=>{const A=S.autoEng;
+      if(engineMode()!=='auto')return'Вибрано вручну в меню «Хто думає».';
+      if(!A||A.res==='checking'||!A.v)return AUTOCHK?'⏳ Зараз перевіряю пристрій у фоні…':'Спочатку працює легкий Stockfish (7 МБ). Трохи згодом тренер сам перевірить, чи потягне пристрій повний (~80 МБ).';
+      return A.res==='full'?`✅ Повний Stockfish (~80 МБ): ${esc(A.why||'')}.`:`Легкий Stockfish (7 МБ): ${esc(A.why||'')}.`})()}</div>
+      ${engineMode()==='auto'?`<button class="btn g sm" id="autoEngRe" style="margin-top:8px" ${AUTOCHK?'disabled':''}>🔄 Перевірити ще раз</button>`:''}</div>
     <div class="card"><div class="row" style="justify-content:space-between;gap:12px"><div><h4 style="margin:0">🔊 Звук</h4><div class="small mut" style="margin-top:4px">Звуки ходів, підказок і подій.</div></div>${sw('setSnd',S.sound!==false)}</div></div>
   </div>`;
   document.querySelectorAll('#home [data-th]').forEach(b=>b.onclick=()=>{S.boardTheme=b.dataset.th;save();applyTheme(S.boardTheme);snd('click');viewSettings()});
   $('#setStorm').onchange=e=>{S.stormOn=e.target.checked;delete S.stormOff;save();updSecret();toast(S.stormOn?'🌪 Шахи-Буря увімкнено':'Шахи-Буря вимкнено')};
   $('#setSnd').onchange=e=>{S.sound=e.target.checked;save();updMe()};
+  if($('#autoEngRe'))$('#autoEngRe').onclick=()=>{autoEngineCheck(true);setTimeout(viewSettings,50)};
 }
 function viewReview(){
   const due=dueList();const all=Object.keys(S.srs).filter(id=>LESSONS[id]&&LESSONS[id].t!=='boss');
@@ -3313,6 +3370,7 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '1.9.0':['🧠 Спочатку працює легкий Stockfish (7 МБ), а у фоні тренер перевіряє пристрій. Якщо він потужний, тихо качає повний (~80 МБ) і пропонує перезавантажити сайт, щоб думати ним. Статус є в Налаштуваннях'],
   '1.8.2':['🛠 Stockfish більше не «завантажується» заново при кожному вході: якщо він уже збережений на пристрої, сайт бере його з памʼяті одразу'],
   '1.8.1':['⚙️ Шахи-Буря тепер вимкнена за замовчуванням: вкладка зʼявляється тільки якщо увімкнути її в Налаштуваннях'],
   '1.8.0':['🎨 Усі емодзі на сайті замінено на власні іконки, намальовані кодом: однаково гарно виглядають на будь-якому телефоні й компʼютері'],
@@ -3362,6 +3420,7 @@ function showWhatsNew(){
   modal(`<div style="font-size:50px">🆕</div><h2>Що нового</h2>${vers.map(v=>`<div class="card" style="text-align:left"><b>Версія ${v}</b><ul style="margin:6px 0 0;padding-left:18px">${CHANGELOG[v].map(x=>`<li style="margin:4px 0">${x}</li>`).join('')}</ul></div>`).join('')}<button class="btn" onclick="closeModal()" style="width:100%">Круто!</button>`);
 }
 applyTheme(S.boardTheme||'green');
+setTimeout(function tryAuto(){if(document.visibilityState==='visible')autoEngineCheck();else setTimeout(tryAuto,20000)},20000);
 {const afterTheme=()=>{if(!S.elo)setTimeout(()=>askElo(true),300);else setTimeout(showWhatsNew,700)};
  if(!S.boardTheme)setTimeout(()=>askBoard(afterTheme),300);else afterTheme();}
 </script>
