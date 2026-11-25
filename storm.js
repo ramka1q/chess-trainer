@@ -1309,6 +1309,7 @@ function askGalleryPassword(){
 
 /* guest: opened an invite link */
 function joinInvite(code){
+  window.STORM_INVITE=true;window.updSecret&&updSecret();
   showView('storm');
   const show=(html,foot)=>panel('🌐 Гра по мережі',`<div id="coachBox"></div>${html}`,foot||`<button class="btn g" id="wxCancel">Скасувати</button>`);
   const bindCancel=()=>{if($('#wxCancel'))$('#wxCancel').onclick=()=>{netClose();showView('storm')}};
