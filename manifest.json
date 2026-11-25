@@ -1,0 +1,14 @@
+{
+  "name": "Шаховий тренер",
+  "short_name": "Тренер",
+  "description": "Шаховий тренер: уроки, задачі, дебюти, ендшпілі, розбір партій зі Stockfish",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#312E2B",
+  "theme_color": "#262421",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

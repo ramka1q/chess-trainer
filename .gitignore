@@ -1,0 +1,6 @@
+# native engine is downloaded by the launcher, never committed
+engine/
+# personal calibration data (your chess.com reviews)
+calib/
+__pycache__/
+*.zip
