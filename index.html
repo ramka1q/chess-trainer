@@ -252,7 +252,7 @@ button{font-family:inherit}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="pieces.js"></script>
 <script src="masters.js"></script>
-<script src="storm.js?v=1.6.2" defer></script>
+<script src="storm.js?v=1.6.3" defer></script>
 <script>
 "use strict";
 /* ================= UTIL ================= */
@@ -715,7 +715,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='1.6.2';
+const APP_VERSION='1.6.3';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -3233,6 +3233,7 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '1.6.3':['📱 Шахи-Буря швидше працює на телефонах: легша 3D-сцена, менше частинок, корона крутиться економніше, туман без важкого розмиття'],
   '1.6.2':['❔ У вправах «Бери безкоштовне» і «Що під ударом» після перевірки над фігурами зʼявляється знак «?». Натисни, і тренер покаже чому',
            '🤫 У меню зʼявилася таємнича вкладка «???». Що за нею, дізнаєшся, тільки коли зазирнеш'],
   '1.6.1':['⚡ Погода тепер відбувається прямо на звичайній 2D-дошці приблизно за секунду, без виходу в 3D',
