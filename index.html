@@ -271,8 +271,8 @@ body.wood .sq.d.hl{background-image:linear-gradient(rgba(170,190,40,.5),rgba(170
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="pieces.js"></script>
 <script src="masters.js"></script>
-<script src="storm.js?v=1.8.1" defer></script>
-<script src="icons.js?v=1.8.1" defer></script>
+<script src="storm.js?v=1.8.2" defer></script>
+<script src="icons.js?v=1.8.2" defer></script>
 <script>
 "use strict";
 /* ================= UTIL ================= */
@@ -599,6 +599,7 @@ const canMulti=()=>self.crossOriginIsolated&&typeof SharedArrayBuffer!=='undefin
 const mtThreads=()=>Math.max(2,Math.min(8,(navigator.hardwareConcurrency||4)-1));
 let SF17_FAIL=false;const SF_BLOBS={};
 let PRELOAD=null;
+if(navigator.storage&&navigator.storage.persist)navigator.storage.persisted().then(p=>{if(!p)navigator.storage.persist().catch(()=>{})}).catch(()=>{});
 function preloadEngine(full,multi){
   const key=multi?'multi':full?'full':'lite';PRELOAD=PRELOAD||{};
   if(!PRELOAD[key])PRELOAD[key]=(async()=>{
@@ -606,12 +607,17 @@ function preloadEngine(full,multi){
     const urls=full?[0,1,2,3,4,5].map(i=>`${base}-part-${i}.wasm`):[SF17_WASM];
     const sizes=full?Array(6).fill(multi?13144776:13175551):[7280741];const total=sizes.reduce((a,b)=>a+b,0);
     let done=0,shown=false;const t0=Date.now();
+    /* files already saved on this device are not read again (that used to look like a new download on phones) */
+    const LIB=self.caches?await caches.open('trainer-libs-v1').catch(()=>null):null;
     for(const u of urls){
+      if(LIB&&await LIB.match(u).catch(()=>null)){done+=sizes[0];continue}
       const r=await fetch(u);if(!r.ok||!r.body){continue}
-      const rd=r.body.getReader();
-      while(true){const{done:d,value}=await rd.read();if(d)break;done+=value.length;
-        if(!shown&&Date.now()-t0>400)shown=true;   /* already cached files load instantly: no bar */
+      const rd=r.body.getReader();const parts=[];
+      while(true){const{done:d,value}=await rd.read();if(d)break;done+=value.length;parts.push(value);
+        if(!shown&&Date.now()-t0>400)shown=true;
         if(shown)showDl(`⬇ Завантажую Stockfish ${full?'(повний)':''}: ${(done/1048576).toFixed(1)} / ${(total/1048576).toFixed(0)} МБ <span class="dim">· лише перший раз</span>`,done/total*100)}
+      /* keep it on the device right away (even before the offline helper is active) */
+      if(LIB)await LIB.put(u,new Response(new Blob(parts),{headers:{'Content-Type':'application/wasm'}})).catch(()=>{});
     }
     if(shown){showDl('✅ Stockfish завантажено',100);setTimeout(()=>showDl(null),1500)}
   })().catch(()=>{showDl(null)});
@@ -772,7 +778,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='1.8.1';
+const APP_VERSION='1.8.2';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -3307,6 +3313,7 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '1.8.2':['🛠 Stockfish більше не «завантажується» заново при кожному вході: якщо він уже збережений на пристрої, сайт бере його з памʼяті одразу'],
   '1.8.1':['⚙️ Шахи-Буря тепер вимкнена за замовчуванням: вкладка зʼявляється тільки якщо увімкнути її в Налаштуваннях'],
   '1.8.0':['🎨 Усі емодзі на сайті замінено на власні іконки, намальовані кодом: однаково гарно виглядають на будь-якому телефоні й компʼютері'],
   '1.7.1':['⚙️ Нова сторінка «Налаштування»: вибір дошки, увімкнути чи вимкнути Шахи-Бурю, звук'],
