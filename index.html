@@ -271,8 +271,8 @@ body.wood .sq.d.hl{background-image:linear-gradient(rgba(170,190,40,.5),rgba(170
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="pieces.js"></script>
 <script src="masters.js"></script>
-<script src="storm.js?v=2.0.1" defer></script>
-<script src="icons.js?v=2.0.1" defer></script>
+<script src="storm.js?v=2.1.0" defer></script>
+<script src="icons.js?v=2.1.0" defer></script>
 <script>
 "use strict";
 /* ================= UTIL ================= */
@@ -629,10 +629,17 @@ function preloadEngine(full,multi,silent){
 async function sf17Blob(url){url=url||SF17_JS;if(SF_BLOBS[url])return SF_BLOBS[url];const r=await fetch(url);if(!r.ok)throw new Error('sf17');SF_BLOBS[url]=URL.createObjectURL(new Blob([await r.text()],{type:'application/javascript'}));return SF_BLOBS[url]}
 /* native Stockfish on this PC through server.py (all CPU cores, full NNUE) */
 const NATIVE={checked:null,ok:false,name:'',threads:0};
+/* On the website the native engine lives in the PC version's server on this computer (http://127.0.0.1:8799).
+   It is only contacted when you switch "think with the PC version" on, so other visitors never get a
+   "local network access" question from the browser. */
+const ON_SITE=location.hostname.endsWith('github.io');
+NATIVE.base=ON_SITE?'http://127.0.0.1:8799':'';
 function engineMode(){return S.engineMode||'auto'}
 function nativeAvailable(){
-  if(engineMode()==='browser'||engineMode()==='full'||location.protocol==='file:'||location.hostname.endsWith('github.io'))return Promise.resolve(false);
-  if(!NATIVE.checked)NATIVE.checked=fetch('/engine/ping',{cache:'no-store'}).then(r=>r.ok?r.json():{ok:false}).then(j=>{NATIVE.ok=!!j.ok;NATIVE.name=j.name||'';NATIVE.threads=j.threads||0;return NATIVE.ok}).catch(()=>false);
+  if(engineMode()==='browser'||engineMode()==='full'||location.protocol==='file:')return Promise.resolve(false);
+  if(ON_SITE&&engineMode()!=='native')return Promise.resolve(false);
+  if(!NATIVE.checked){const ac=new AbortController();const tm=setTimeout(()=>ac.abort(),ON_SITE?20000:4000);
+   NATIVE.checked=fetch(NATIVE.base+'/engine/ping',{cache:'no-store',signal:ac.signal}).finally(()=>clearTimeout(tm)).then(r=>r.ok?r.json():{ok:false}).then(j=>{NATIVE.ok=!!j.ok;NATIVE.name=j.name||'';NATIVE.threads=j.threads||0;return NATIVE.ok}).catch(()=>false);}
   return NATIVE.checked;
 }
 const ENGINES=[];
@@ -684,7 +691,7 @@ class Engine{
         try{
           /* the native engine is ~10x faster: search deeper in the same time (bots keep their own depth) */
           const D=this.slot==='bot'?depth:Math.min(40,depth+8);
-          const r=await fetch('/engine',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slot:this.slot,fen,depth:D,movetime:time,multipv,searchmoves,skill})});
+          const r=await fetch(NATIVE.base+'/engine',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slot:this.slot,fen,depth:D,movetime:time,multipv,searchmoves,skill})});
           const j=await r.json();if(j.error)throw new Error(j.error);
           const arr=j.lines.map(l=>({cp:l.cp,mate:l.mate,pv:l.pv,depth:l.depth}));
           return{best:j.best,cp:arr[0].cp,pv:arr[0].pv,lines:arr};
@@ -847,7 +854,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='2.0.1';
+const APP_VERSION='2.1.0';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -3257,11 +3264,13 @@ function viewSettings(){
       return A.res==='full'?`✅ Зараз: повний Stockfish (~100 МБ), ${esc(A.why||'')}.`:`Зараз: легкий Stockfish (2 МБ), ${esc(A.why||'')}.`})()}</div>
       ${engineMode()==='auto'?`<div class="row" style="gap:10px;margin-top:10px">${Object.entries(DEVOPT).map(([k,o])=>`<button class="thOpt" data-devset="${k}" style="text-align:left;font-weight:600;${(S.autoFull===true?'full':'lite')===k?'border-color:var(--green)':''}"><b>${o.i} ${o.n}</b>${(S.autoFull===true?'full':'lite')===k?' ✓':''}<div class="small mut" style="margin-top:4px;font-weight:400">${o.d}</div></button>`).join('')}</div>
       <button class="btn g sm" id="autoEngRe" style="margin-top:8px" ${AUTOCHK?'disabled':''}>🔄 Не знаю: перевір пристрій сам</button>`:''}</div>
+    <div class="card"><div class="row" style="justify-content:space-between;gap:12px"><div><h4 style="margin:0">💻 Рахувати через ПК-версію</h4><div class="small mut" style="margin-top:4px">Якщо на цьому компʼютері запущено «Запустити шахи.cmd», сайт думає тим самим Stockfish 19, що й ПК-версія: на всіх ядрах, один в один. ${engineMode()==='native'?(NATIVE.ok?`<b style="color:var(--green)">✅ Підключено: ${esc(NATIVE.name)}${NATIVE.threads?`, ${NATIVE.threads} ${plural(NATIVE.threads,'ядро','ядра','ядер')}`:''}</b>`:'<b style="color:var(--orange)">⏳ ПК-версію не знайдено: запусти «Запустити шахи.cmd» і натисни перемикач ще раз.</b>'):''}${ON_SITE?' Браузер може один раз запитати дозвіл на доступ до локальної мережі: дозволь.':''}</div></div>${sw('setLocal',engineMode()==='native')}</div></div>
     <div class="card"><div class="row" style="justify-content:space-between;gap:12px"><div><h4 style="margin:0">🔊 Звук</h4><div class="small mut" style="margin-top:4px">Звуки ходів, підказок і подій.</div></div>${sw('setSnd',S.sound!==false)}</div></div>
   </div>`;
   document.querySelectorAll('#home [data-th]').forEach(b=>b.onclick=()=>{S.boardTheme=b.dataset.th;save();applyTheme(S.boardTheme);snd('click');viewSettings()});
   $('#setStorm').onchange=e=>{S.stormOn=e.target.checked;delete S.stormOff;save();updSecret();toast(S.stormOn?'🌪 Шахи-Буря увімкнено':'Шахи-Буря вимкнено')};
   $('#setSnd').onchange=e=>{S.sound=e.target.checked;save();updMe()};
+  $('#setLocal').onchange=async e=>{setEngineMode(e.target.checked?'native':'auto');updEngName&&updEngName();if(e.target.checked){toast('⏳ Шукаю ПК-версію…');const ok=await nativeAvailable();toast(ok?'✅ Підключено до ПК-версії: думає '+esc(NATIVE.name):'⚠️ ПК-версію не знайдено: запусти «Запустити шахи.cmd»',4500)}viewSettings()};
   if($('#autoEngRe'))$('#autoEngRe').onclick=()=>{if(!S.devChoice)S.devChoice='auto';autoEngineCheck(true);setTimeout(viewSettings,50)};
   document.querySelectorAll('[data-devset]').forEach(b=>b.onclick=()=>{snd('click');setDevice(b.dataset.devset);viewSettings();toast(b.dataset.devset==='full'?'💪 Вибрано повний Stockfish':'📱 Вибрано легкий Stockfish')});
 }
@@ -3390,6 +3399,7 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '2.1.0':['💻 Сайт може думати Stockfish 19 з ПК-версії, один в один як через .cmd: запусти «Запустити шахи.cmd» і увімкни в Налаштуваннях «Рахувати через ПК-версію»'],
   '2.0.1':['💻 На компʼютері одразу працює повний Stockfish 19, без перевірок і без вікна з перезавантаженням'],
   '2.0.0':['🧠 Stockfish оновлено з 17.1 до 19: найновіша версія для браузера. Легка тепер важить лише 2 МБ, повна ~100 МБ. Старі файли 17.1 видаляються з пристрою самі'],
   '1.9.3':['🛠 Питання «Твій пристрій потужний?» більше не повторюється: зберігається з першого разу, а на компʼютері його взагалі не буде (компʼютер перевіряється сам)'],
