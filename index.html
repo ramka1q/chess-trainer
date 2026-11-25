@@ -271,8 +271,8 @@ body.wood .sq.d.hl{background-image:linear-gradient(rgba(170,190,40,.5),rgba(170
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="pieces.js"></script>
 <script src="masters.js"></script>
-<script src="storm.js?v=1.9.0" defer></script>
-<script src="icons.js?v=1.9.0" defer></script>
+<script src="storm.js?v=1.9.1" defer></script>
+<script src="icons.js?v=1.9.1" defer></script>
 <script>
 "use strict";
 /* ================= UTIL ================= */
@@ -765,7 +765,7 @@ async function dropFullFiles(multi){
 async function autoEngineCheck(force){
   if(engineMode()!=='auto'||AUTOCHK)return;
   if(await nativeAvailable())return;
-  if(!force&&S.autoEng&&S.autoEng.v===AUTO_V)return;
+  if(!force&&(!S.devChoice||(S.autoEng&&S.autoEng.v===AUTO_V)))return;
   AUTOCHK=true;S.autoEng={v:0,res:'checking'};
   const fin=(res,why,extra={})=>{S.autoEng={v:AUTO_V,res,why,at:Date.now(),...extra};S.autoFull=res==='full';save();AUTOCHK=false;
     if($('#autoEngBox'))viewSettings();return res};
@@ -787,6 +787,20 @@ async function autoEngineCheck(force){
     else toast('🧠 Знайшов кращу можливість: повний Stockfish. Перезавантаж сайт, щоб увімкнути',6000);
     return r;
   }catch(e){AUTOCHK=false;S.autoEng=null}
+}
+const DEVOPT={
+  full:{i:'💪',n:'Потужний',d:'Сучасний телефон середнього чи вищого класу (наприклад Poco X5 Pro, Galaxy A54, iPhone 11 і новіші) або компʼютер. Качає <b>повний Stockfish (~80 МБ)</b>: сильніший.'},
+  lite:{i:'📱',n:'Звичайний або слабкий',d:'Бюджетний чи старий телефон (2–3 ГБ памʼяті, наприклад iPhone 8). Качає <b>легкий Stockfish (7 МБ)</b>: швидкий і стабільний.'}};
+function setDevice(choice){
+  const was=S.autoFull===true;
+  S.devChoice=choice;S.autoFull=choice==='full';S.autoEng={v:AUTO_V,res:choice,why:'ти вибрав сам',at:Date.now(),manual:true};save();
+  /* restart the engines so the chosen version is loaded now (the download bar shows its progress) */
+  if(engineMode()==='auto'&&was!==S.autoFull)setEngineMode('auto');
+}
+function askDevice(next){
+  modal(`<h2>📱 Твій пристрій потужний?</h2><p class="small mut">Від цього залежить, яку версію Stockfish (шахового рушія) завантажити. Потім можна змінити в Налаштуваннях.</p>
+    <div class="list" style="text-align:left;margin-top:10px">${Object.entries(DEVOPT).map(([k,o])=>`<div class="it" data-dev="${k}" style="align-items:flex-start;cursor:pointer"><span style="font-size:26px;width:34px;text-align:center">${o.i}</span><div style="flex:1"><b>${o.n}</b><div class="small mut" style="margin-top:3px">${o.d}</div></div></div>`).join('')}</div>`);
+  document.querySelectorAll('[data-dev]').forEach(b=>b.onclick=()=>{snd('good');closeModal();setDevice(b.dataset.dev);next&&next()});
 }
 function engineWarm(){coachE.init().catch(()=>{});botE.init().catch(()=>{});evalE.init().catch(()=>{})}
 
@@ -829,7 +843,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='1.9.0';
+const APP_VERSION='1.9.1';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -3236,14 +3250,16 @@ function viewSettings(){
     <div class="card" id="autoEngBox"><h4 style="margin:0">🧠 Stockfish на цьому пристрої</h4><div class="small mut" style="margin-top:6px">${(()=>{const A=S.autoEng;
       if(engineMode()!=='auto')return'Вибрано вручну в меню «Хто думає».';
       if(!A||A.res==='checking'||!A.v)return AUTOCHK?'⏳ Зараз перевіряю пристрій у фоні…':'Спочатку працює легкий Stockfish (7 МБ). Трохи згодом тренер сам перевірить, чи потягне пристрій повний (~80 МБ).';
-      return A.res==='full'?`✅ Повний Stockfish (~80 МБ): ${esc(A.why||'')}.`:`Легкий Stockfish (7 МБ): ${esc(A.why||'')}.`})()}</div>
-      ${engineMode()==='auto'?`<button class="btn g sm" id="autoEngRe" style="margin-top:8px" ${AUTOCHK?'disabled':''}>🔄 Перевірити ще раз</button>`:''}</div>
+      return A.res==='full'?`✅ Зараз: повний Stockfish (~80 МБ), ${esc(A.why||'')}.`:`Зараз: легкий Stockfish (7 МБ), ${esc(A.why||'')}.`})()}</div>
+      ${engineMode()==='auto'?`<div class="row" style="gap:10px;margin-top:10px">${Object.entries(DEVOPT).map(([k,o])=>`<button class="thOpt" data-devset="${k}" style="text-align:left;font-weight:600;${(S.autoFull===true?'full':'lite')===k?'border-color:var(--green)':''}"><b>${o.i} ${o.n}</b>${(S.autoFull===true?'full':'lite')===k?' ✓':''}<div class="small mut" style="margin-top:4px;font-weight:400">${o.d}</div></button>`).join('')}</div>
+      <button class="btn g sm" id="autoEngRe" style="margin-top:8px" ${AUTOCHK?'disabled':''}>🔄 Не знаю: перевір пристрій сам</button>`:''}</div>
     <div class="card"><div class="row" style="justify-content:space-between;gap:12px"><div><h4 style="margin:0">🔊 Звук</h4><div class="small mut" style="margin-top:4px">Звуки ходів, підказок і подій.</div></div>${sw('setSnd',S.sound!==false)}</div></div>
   </div>`;
   document.querySelectorAll('#home [data-th]').forEach(b=>b.onclick=()=>{S.boardTheme=b.dataset.th;save();applyTheme(S.boardTheme);snd('click');viewSettings()});
   $('#setStorm').onchange=e=>{S.stormOn=e.target.checked;delete S.stormOff;save();updSecret();toast(S.stormOn?'🌪 Шахи-Буря увімкнено':'Шахи-Буря вимкнено')};
   $('#setSnd').onchange=e=>{S.sound=e.target.checked;save();updMe()};
-  if($('#autoEngRe'))$('#autoEngRe').onclick=()=>{autoEngineCheck(true);setTimeout(viewSettings,50)};
+  if($('#autoEngRe'))$('#autoEngRe').onclick=()=>{if(!S.devChoice)S.devChoice='auto';autoEngineCheck(true);setTimeout(viewSettings,50)};
+  document.querySelectorAll('[data-devset]').forEach(b=>b.onclick=()=>{snd('click');setDevice(b.dataset.devset);viewSettings();toast(b.dataset.devset==='full'?'💪 Вибрано повний Stockfish':'📱 Вибрано легкий Stockfish')});
 }
 function viewReview(){
   const due=dueList();const all=Object.keys(S.srs).filter(id=>LESSONS[id]&&LESSONS[id].t!=='boss');
@@ -3370,6 +3386,7 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '1.9.1':['📱 При першому вході сайт питає, чи потужний твій пристрій: потужний отримує повний Stockfish (~80 МБ), звичайний легкий (7 МБ). Змінити можна в Налаштуваннях'],
   '1.9.0':['🧠 Спочатку працює легкий Stockfish (7 МБ), а у фоні тренер перевіряє пристрій. Якщо він потужний, тихо качає повний (~80 МБ) і пропонує перезавантажити сайт, щоб думати ним. Статус є в Налаштуваннях'],
   '1.8.2':['🛠 Stockfish більше не «завантажується» заново при кожному вході: якщо він уже збережений на пристрої, сайт бере його з памʼяті одразу'],
   '1.8.1':['⚙️ Шахи-Буря тепер вимкнена за замовчуванням: вкладка зʼявляється тільки якщо увімкнути її в Налаштуваннях'],
@@ -3421,7 +3438,8 @@ function showWhatsNew(){
 }
 applyTheme(S.boardTheme||'green');
 setTimeout(function tryAuto(){if(document.visibilityState==='visible')autoEngineCheck();else setTimeout(tryAuto,20000)},20000);
-{const afterTheme=()=>{if(!S.elo)setTimeout(()=>askElo(true),300);else setTimeout(showWhatsNew,700)};
+{const afterDev=()=>{if(!S.elo)setTimeout(()=>askElo(true),300);else setTimeout(showWhatsNew,700)};
+ const afterTheme=()=>{if(!S.devChoice)setTimeout(()=>askDevice(afterDev),300);else afterDev()};
  if(!S.boardTheme)setTimeout(()=>askBoard(afterTheme),300);else afterTheme();}
 </script>
 </body>
