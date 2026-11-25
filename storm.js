@@ -644,7 +644,7 @@ async function play3D(evk,X){
   /* lift off */
   W3.speed=1;
   await Promise.all([camTo('board',1500),tween(900,e=>setRoomAlpha(e)),(async()=>{await wait(350);await tween(900,e=>W3.stand=e,easeO)})()]);
-  caption(X.cap||EVENTS[evk]);
+  if(evk!=='qcap')caption(X.cap||EVENTS[evk]);
   const needCh=['crow','ufo','ufoBack','watcher','meteor'];
   const generic=async()=>{await camTo('window',900);if(evk==='lightning'||evk==='meteor')SFX.thunder();else if(evk==='crow')SFX.caw();else if(evk.startsWith('ufo'))SFX.ufo();else SFX.wind(2.5);await wait(1400);await camTo('board',900)};
   if(evk==='qcap')await qcapFX(X);else
@@ -671,6 +671,7 @@ async function play3D(evk,X){
   ]);
   W3.shake=0;W3.flash=0;
   await wait(40);
+  if(X.before2D)X.before2D();
   X.hide2D(false);await wait(30);
   W3.on=false;W3.cv.style.display='none';u.classList.remove('on');u.style.display='none';
   W3.cleanup.forEach(f=>{try{f()}catch(e){}});W3.cleanup=[];W3.upd.clear();
@@ -678,7 +679,7 @@ async function play3D(evk,X){
 }
 /* fallback when WebGL / three.js is unavailable */
 async function play2D(evk,X){
-  const u=ui3();u.style.display='block';u.classList.add('on');caption(X.cap||EVENTS[evk]);if(evk==='qcap'){SFX.boom();await sleep(600)}
+  const u=ui3();u.style.display='block';u.classList.add('on');if(evk!=='qcap')caption(X.cap||EVENTS[evk]);if(evk==='qcap'){SFX.boom();await sleep(600)}
   const b=document.querySelector('#board');b.classList.add('wxShake');
   if(evk==='lightning'||evk==='meteor')SFX.thunder();else if(evk==='tornado'||evk==='fog')SFX.wind(3);else if(evk==='crow')SFX.caw();else if(evk.startsWith('ufo'))SFX.ufo();else if(evk==='quake')SFX.rumble();else if(evk==='rainbow')SFX.chime();else if(evk==='frost')SFX.freeze();
   await sleep(2200);b.classList.remove('wxShake');u.classList.remove('capOn','on');u.style.display='none';
@@ -843,7 +844,7 @@ function StormRun(opt){
     for(const k of Object.keys(st.frozen)){st.frozen[k]--;if(st.frozen[k]<=0)delete st.frozen[k]}
     if(st.fog>0)st.fog--;
     if(st.secret&&ply>=st.secret.until)st.secret=null;
-    if(mv.captured==='q')await queenCapture(mv);
+    if(mv.captured==='q'){await queenCapture(mv);board.skipAnim=true}
     board.last=[mv.from,mv.to];board.arrows=[];board.render(noAnim?undefined:[mv.from,mv.to]);moveSound(mv,g);
     if(checkOver()){sendReady();return}
     render();
@@ -911,7 +912,7 @@ function StormRun(opt){
     board.sel=null;
     {const r0=$('#board').getBoundingClientRect();if(r0.top<0||r0.bottom>innerHeight){$('#board').scrollIntoView({block:'center'});await sleep(250)}}
     const ctx={turn:g.turn(),fen:g.fen(),res:{fen:g.fen(),ch:[]},map0,flip:board.flip,last:last0,rect:$('#board').getBoundingClientRect(),
-      qc:{from:mv.from,to:mv.to,p:mv.piece},cap:qcapCaption(mv.piece),hide2D:h=>{$('#board').style.visibility=h?'hidden':''}};
+      qc:{from:mv.from,to:mv.to,p:mv.piece},cap:qcapCaption(mv.piece),before2D:()=>{board.last=[mv.from,mv.to];board.arrows=[];board.skipAnim=true;board.render()},hide2D:h=>{$('#board').style.visibility=h?'hidden':''}};
     try{await play3D('qcap',ctx)}catch(e){console.warn('capture 3D failed',e);$('#board').style.visibility='';try{W3.on=false;W3.cv&&(W3.cv.style.display='none');W3.ui&&(W3.ui.style.display='none')}catch(_){}await play2D('qcap',ctx)}
     $('#board').style.visibility='';
     if(me.alive){S.storm.qcap=S.storm.qcap||{};S.storm.qcap[mv.piece]=(S.storm.qcap[mv.piece]||0)+1;save();log.push({e:`${QCAP[mv.piece].i} ${QCAP[mv.piece].n}`})}
