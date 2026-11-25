@@ -250,6 +250,7 @@ async function init3D(){
   W3.top=new T.Mesh(new T.PlaneGeometry(8,8),new T.MeshBasicMaterial({map:W3.btex}));W3.top.rotation.x=-Math.PI/2;W3.top.position.y=.001;scene.add(W3.top);
   W3.ptex={};await Promise.all(['w','b'].flatMap(c=>['p','n','b','r','q','k'].map(t=>new Promise(res=>{const im=new Image();im.onload=()=>{const c2=document.createElement('canvas');c2.width=c2.height=256;c2.getContext('2d').drawImage(im,0,0,256,256);W3.ptex[c+t]=makeTex(c2);res()};im.onerror=res;im.src=PIC(c,t)}))));
   W3.pgeo=new T.PlaneGeometry(1,1);
+  await crownInit();if(CR.ready)W3.crownTex=makeTex(CR.cv2);
   /* main loop */
   let last=performance.now();
   let lastStep=0;
@@ -289,6 +290,35 @@ function drawBoard(info){
   W3.btex.needsUpdate=true;
 }
 
+/* the crown a pawn earns by capturing a queen: purely cosmetic, it stays on the piece */
+const CROWN_SVG="data:image/svg+xml,"+encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 72'><g stroke='#6b4300' stroke-width='2.5' stroke-linejoin='round'><polygon points='0,47 14,3 28,47' fill='#ffd54a'/><polygon points='92,47 106,3 120,47' fill='#ffd54a'/><polygon points='46,47 60,1 74,47' fill='#ffd54a'/><path d='M2,42 Q60,52 118,42 L118,63 Q60,73 2,63 Z' fill='#ffc928'/><ellipse cx='12' cy='54' rx='4.5' ry='8' fill='#3bff8a'/><circle cx='60' cy='58' r='8.5' fill='#3bb2ff'/><ellipse cx='108' cy='54' rx='4.5' ry='8' fill='#ff3b5c'/></g><path d='M8,47 Q60,56 112,47' stroke='#fff2b0' stroke-width='2' fill='none' opacity='.75'/></svg>`);
+const CR={p:null,ready:false,failed:false};
+function crownInit(){
+  if(CR.p)return CR.p;
+  CR.p=(async()=>{try{
+    const T=await loadThree();const r=new T.WebGLRenderer({alpha:true,antialias:true});r.setPixelRatio(1);r.setSize(240,180,false);r.setClearColor(0,0);
+    const sc=new T.Scene();const cam=new T.PerspectiveCamera(30,4/3,.05,20);cam.position.set(0,.3,1.25);cam.lookAt(0,.09,0);
+    const g=buildCrown(T);sc.add(g);const cv2=document.createElement('canvas');cv2.width=240;cv2.height=180;
+    Object.assign(CR,{T,r,sc,cam,g,cv2,ready:true});
+    const draw=n=>{const els=document.querySelectorAll('canvas.wxCrownC');if(!els.length&&!(W3.on&&W3.crownTex))return;
+      g.rotation.y=n/700;g.position.y=Math.sin(n/300)*.02;r.render(sc,cam);
+      const x=cv2.getContext('2d');x.clearRect(0,0,240,180);x.drawImage(r.domElement,0,0);
+      els.forEach(c=>{const cx=c.getContext('2d');cx.clearRect(0,0,c.width,c.height);cx.drawImage(cv2,0,0,c.width,c.height)});
+      if(W3.crownTex)W3.crownTex.needsUpdate=true};
+    const loop=n=>{requestAnimationFrame(loop);draw(n)};requestAnimationFrame(loop);
+  }catch(e){CR.failed=true}})();
+  return CR.p;
+}
+/* 2D board: a canvas showing the spinning 3D crown (60% × 45% of the square, over the piece's head) */
+function crownHTML(){if(CR.failed)return`<img class="wxCrown" src="${CROWN_SVG}" draggable="false" style="top:4%;height:30%">`;if(!CR.ready)crownInit();return`<canvas class="wxCrown wxCrownC" width="120" height="90"></canvas>`}
+/* 3D scene: lying flat it shows the same spinning picture, standing up it becomes the crown model */
+function crownOn(o){
+  if(o.crown||!W3.crownTex)return;const T=W3.T;
+  const m=new T.Mesh(new T.PlaneGeometry(.6,.45),new T.MeshBasicMaterial({map:W3.crownTex,transparent:true,alphaTest:.02,side:T.DoubleSide}));
+  m.position.set(0,.5-.105,.004);o.pl.add(m);o.crown=m;
+  o.crown3=makeCrown(true);o.crown3.scale.setScalar(.001);
+}
+
 /* a piece is just its 2D picture: lies flat (identical to the 2D board from above) and stands up when s→1 */
 function makePiece(sq,p){
   const T=W3.T;const grp=new T.Group();grp.rotation.order='YXZ';
@@ -297,7 +327,7 @@ function makePiece(sq,p){
   W3.scene.add(grp);
   const o={sq,p,grp,pl,mat,x:0,z:0,lift:0,spin:0,fall:0,alpha:1,tint:1,own:false,scale:1};const w=sqW(sq);o.x=w.x;o.z=w.z;return o;
 }
-function disposePiece(o){W3.scene.remove(o.grp);o.mat.dispose()}
+function disposePiece(o){W3.scene.remove(o.grp);o.mat.dispose();if(o.crown){o.crown.geometry.dispose();o.crown.material.dispose()}if(o.crown3)W3.scene.remove(o.crown3)}
 
 /* per-frame: camera, pieces, weather */
 function frame(dt){
@@ -328,6 +358,12 @@ function updPiece(o,lv){
   o.grp.scale.setScalar(o.scale);
   o.pl.position.y=(.5-.1*s);
   o.mat.color.setScalar(Math.min(1.6,lv*o.tint));o.mat.opacity=o.alpha;
+  if(o.crown){ /* standing: the 3D crown floats over the head (same as when it was won); lying flat: the 2D picture */
+    const k=Math.min(1,Math.max(0,(s-.15)/.6));const n=performance.now();
+    o.crown.material.opacity=(1-k)*o.alpha;o.crown.visible=k<.99;
+    o.crown3.visible=k>.01&&o.alpha>.02&&o.fall<.5;o.crown3.scale.setScalar(Math.max(.001,k*o.scale*Math.min(1,o.alpha*1.5)));
+    o.crown3.position.set(o.x,o.lift+1.18*k+.35*(1-k)+Math.sin(n/300)*.04*k,o.z);o.crown3.rotation.y=n/700;
+  }
 }
 
 /* camera shots */
@@ -438,11 +474,13 @@ function burst(w,n,col,speed,size=.25,y=.4){const T=W3.T;const P=particles(n,col
   for(let i=0;i<n;i++){a[i*3]=w.x;a[i*3+1]=y;a[i*3+2]=w.z;const d=new T.Vector3(Math.random()-.5,Math.random()*.9+.2,Math.random()-.5).normalize().multiplyScalar(speed*(.4+Math.random()));v.push(d)}
   const stop=every((nw,dt)=>{for(let i=0;i<n;i++){v[i].y-=6*dt;a[i*3]+=v[i].x*dt;a[i*3+1]=Math.max(.04,a[i*3+1]+v[i].y*dt);a[i*3+2]+=v[i].z*dt}P.geometry.attributes.position.needsUpdate=true;P.material.opacity=Math.max(0,P.material.opacity-dt*.35)});
   W3.cleanup.push(()=>{stop();W3.scene.remove(P)});}
-function makeCrown(){const T=W3.T;const g=new T.Group();const m=new T.MeshBasicMaterial({color:0xffd54a});
+function buildCrown(T){const g=new T.Group();const m=new T.MeshBasicMaterial({color:0xffd54a});
   const band=new T.Mesh(new T.CylinderGeometry(.3,.3,.14,20,1,true),new T.MeshBasicMaterial({color:0xffc928,side:T.DoubleSide}));g.add(band);
   for(let i=0;i<6;i++){const a=i/6*Math.PI*2;const c=new T.Mesh(new T.ConeGeometry(.07,.22,6),m);c.position.set(Math.cos(a)*.3,.17,Math.sin(a)*.3);g.add(c);
     const gem=new T.Mesh(new T.SphereGeometry(.045,8,6),new T.MeshBasicMaterial({color:[0xff3b5c,0x3bb2ff,0x3bff8a][i%3]}));gem.position.set(Math.cos(a)*.31,0,Math.sin(a)*.31);g.add(gem)}
-  W3.scene.add(g);W3.cleanup.push(()=>W3.scene.remove(g));return g}
+  return g}
+function makeCrown(keep){const g=buildCrown(W3.T);g.userData.crown3d=!keep;
+  W3.scene.add(g);if(!keep)W3.cleanup.push(()=>W3.scene.remove(g));return g}
 function heartbeat(n=3,gap=.75){for(let i=0;i<n;i++){tone(52,.22,{g:.5,delay:i*gap});tone(46,.25,{g:.45,delay:i*gap+.22})}}
 function fanfare(){[[392,0],[523,.18],[659,.36],[784,.54],[1047,.8]].forEach(([f,d])=>{tone(f,.9,{type:'triangle',g:.1,delay:d});tone(f/2,.9,{type:'sawtooth',g:.03,delay:d})})}
 
@@ -457,7 +495,7 @@ async function qcapFX(X){
     W3.lamp.userData.on=1;
     await Promise.all([camTo(shotAt(wf,back+.35,3.2,1.5,.6),1200),tween(1100,e=>{W3.lvl=lerp(1,.32,e);W3.lamp.userData.on=1-e*.85})]);
     const aura=new W3.T.Sprite(new W3.T.SpriteMaterial({map:blobTex('255,200,70'),transparent:true,depthWrite:false,blending:W3.T.AdditiveBlending,opacity:0}));aura.scale.set(3.2,3.2,1);W3.scene.add(aura);W3.cleanup.push(()=>W3.scene.remove(aura));
-    const crown=makeCrown();crown.scale.setScalar(.01);
+    const crown=makeCrown();W3.floatCrown=crown;crown.scale.setScalar(.01);if(o.crown)crown.visible=false; /* already crowned: keep its own crown */
     const follow=every(n=>{aura.position.set(o.x,o.lift+.5,o.z);crown.position.set(o.x,o.lift+1.18+Math.sin(n/300)*.04,o.z);crown.rotation.y=n/700});W3.cleanup.push(follow);
     heartbeat(4,.7);
     burst(wf,160,0xffd54a,2.2,.18,.2);
@@ -501,7 +539,9 @@ async function qcapFX(X){
   }
   await tween(700+t*150,e=>{W3.shake=(.06*t+.04)*(1-e)});
   /* 5. hero pose */
-  W3.pcs[c.to]=o;delete W3.pcs[c.from];o.sq=c.to;disposePiece(q);
+  W3.pcs[c.to]=o;delete W3.pcs[c.from];o.sq=c.to;
+  if(q.crown||t===4){if(W3.floatCrown){W3.floatCrown.visible=false;W3.floatCrown.scale.setScalar(.001)}crownOn(o)}
+  disposePiece(q);
   if(t===4){await camTo(shotAt(wt,back+.25,4,1.9,.9),1100);await wait(900);await tween(900,e=>{W3.lvl=lerp(.32,1,e);W3.lamp.userData.on=lerp(.15,1,e);o.tint=lerp(1.9,1,e);W3.skyTint.setRGB(lerp(2.2,1,e),lerp(1.8,1,e),1)})}
   else{await camTo(shotAt(wt,back+.4,3+t*.3,1.3,.5),900);await wait(400+t*150)}
   o.own=false;
@@ -630,11 +670,11 @@ async function play3D(evk,X){
   if(!innerWidth||!innerHeight||rc.width<40)throw new Error('board not visible');W3.W=innerWidth;W3.H=innerHeight;W3.cx=rc.left+rc.width/2;W3.cy=rc.top+rc.height/2;
   W3.R.setSize(W3.W,W3.H,false);W3.cv.style.width=W3.W+'px';W3.cv.style.height=W3.H+'px';W3.cam.aspect=W3.W/W3.H;W3.cam.fov=35;W3.cam.updateProjectionMatrix();
   W3.d=8*W3.H/(rc.width*2*Math.tan(35*Math.PI/360));
-  W3.flip=X.flip;W3.speed=1;W3.cleanup=[];W3.onReturn=[];W3.extra=[];W3.ice=[];W3.flash=0;W3.shake=0;W3.lvl=1;W3.wind=0;W3.lamp.userData.on=1;W3.skyTint=new T.Color(1,1,1);
+  W3.flip=X.flip;W3.speed=1;W3.cleanup=[];W3.onReturn=[];W3.floatCrown=null;W3.extra=[];W3.ice=[];W3.flash=0;W3.shake=0;W3.lvl=1;W3.wind=0;W3.lamp.userData.on=1;W3.skyTint=new T.Color(1,1,1);
   W3.rainSpeed=38;W3.rainLen=1.1;W3.rain.material.color.setHex(0x9fb3d6);W3.rain.visible=true;W3.glass.visible=true;W3.frost.material.userData.base=0;W3.frost.material.opacity=0;
   W3.cup.rotation.set(0,0,0);W3.cup.position.set(6,-.3,2.2);W3.curt.forEach(c=>{c.rotation.set(0,0,0);c.position.z=-8.4});
   for(const k in W3.pcs)disposePiece(W3.pcs[k]);W3.pcs={};
-  for(const[sq,p]of Object.entries(X.map0))W3.pcs[sq]=makePiece(sq,p);
+  for(const[sq,p]of Object.entries(X.map0)){W3.pcs[sq]=makePiece(sq,p);if(X.crowns&&X.crowns.includes(sq))crownOn(W3.pcs[sq])}
   drawBoard({last:X.last});W3.C=cloneShot(shot('top'));W3.stand=0;setRoomAlpha(0);
   const u=ui3();u.classList.remove('capOn');u.querySelector('.bo').style.opacity=0;
   W3.on=true;W3.cv.style.display='block';u.style.display='block';
@@ -708,6 +748,9 @@ const CSS=`
 .wxEv .i{font-size:22px;width:30px;text-align:center}
 .wxLog{max-height:190px;overflow:auto;font-size:13px;line-height:1.55}
 .wxLog .e{background:rgba(116,155,191,.16);border-left:3px solid #749BBF;padding:3px 7px;margin:4px 0;border-radius:3px}
+.sq .wxCrown{position:absolute;left:20%;top:-12%;width:60%;height:45%;z-index:5;pointer-events:none;filter:drop-shadow(0 1px 1px rgba(0,0,0,.45))}
+.wxFly{position:fixed;z-index:950;pointer-events:none;filter:drop-shadow(0 0 10px rgba(255,210,80,.9))}
+.wxSpark{position:fixed;z-index:951;pointer-events:none;font-size:16px}
 .wxOmen{background:rgba(247,198,49,.12);border:1px dashed var(--gold);border-radius:6px;padding:8px 10px;font-size:14px;margin-bottom:8px}
 `;
 let cssDone=false;function css(){if(cssDone)return;cssDone=true;const s=document.createElement('style');s.textContent=CSS;document.head.appendChild(s)}
@@ -754,7 +797,7 @@ function StormRun(opt){
   let g=opt.fen?new Chess(opt.fen):new Chess(),busy=false,over=false,ply=0;
   const gapR=FREQ[opt.freq][1];const gap=()=>gapR[0]+Math.floor(Math.random()*(gapR[1]-gapR[0]+1));
   let nextAt=opt.nextAt||Math.max(6,gap()),upcoming=null;
-  const st={fog:0,fogR:null,frozen:{},ufo:null,secret:null};
+  const st={fog:0,fogR:null,frozen:{},ufo:null,secret:null,crowns:{...(opt.crowns||{})}};
   const log=[];const forecast=opt.forecast||makeForecast();
   board.clear();board.flip=human==='b';board.set(g);board.showDots=true;
   /* board hooks: frozen pieces cannot move, fog / ice / ufo marks drawn after every render */
@@ -763,7 +806,8 @@ function StormRun(opt){
   function decorate(){
     for(let i=0;i<64;i++){const sq=board.idxToSq(i),d=board.sqs[i];
       if(st.fog>0&&st.fogR&&+sq[1]>=st.fogR[0]&&+sq[1]<=st.fogR[1]){d.classList.add('fogd');d.insertAdjacentHTML('beforeend','<span class="wxFog"></span>')}
-      if(st.frozen[sq])d.insertAdjacentHTML('beforeend','<span class="wxIce"></span>')}
+      if(st.frozen[sq])d.insertAdjacentHTML('beforeend','<span class="wxIce"></span>');
+      if(st.crowns[sq]&&!(st.crownHide===sq)&&!(board.drag&&board.drag.moved&&board.drag.from===sq))d.insertAdjacentHTML('beforeend',crownHTML())}
   }
   const names=()=>{
     if(opt.mode==='friend'){const top=board.flip?'w':'b',bot=board.flip?'b':'w';players(plHtml(top==='w'?'Білі':'Чорні','друг',top),plHtml(bot==='w'?'Білі':'Чорні','друг',bot))}
@@ -840,12 +884,20 @@ function StormRun(opt){
     busy=true;
     {const n=+g.fen().split(' ')[5];log.push({s:(mv.color==='w'?n+'.':(n-1)+'…')+' '+mv.san})}
     if(st.frozen[mv.to])delete st.frozen[mv.to];
+    /* crowns follow their piece; a captured crown goes to the capturer */
+    const capSq=mv.flags.includes('e')?mv.to[0]+mv.from[1]:mv.captured?mv.to:null;
+    const stolen=capSq&&st.crowns[capSq]&&mv.captured!=='q';
+    if(capSq){if(mv.captured==='q'&&st.crowns[capSq])st.crownQ=true;delete st.crowns[capSq]}
+    if(st.crowns[mv.from]){delete st.crowns[mv.from];st.crowns[mv.to]=1}
+    if(mv.flags.includes('k')||mv.flags.includes('q')){const r=mv.from[1],a=mv.flags.includes('k')?['h'+r,'f'+r]:['a'+r,'d'+r];if(st.crowns[a[0]]){delete st.crowns[a[0]];st.crowns[a[1]]=1}}
     ply++;
     for(const k of Object.keys(st.frozen)){st.frozen[k]--;if(st.frozen[k]<=0)delete st.frozen[k]}
     if(st.fog>0)st.fog--;
     if(st.secret&&ply>=st.secret.until)st.secret=null;
-    if(mv.captured==='q'){await queenCapture(mv);board.skipAnim=true}
-    board.last=[mv.from,mv.to];board.arrows=[];board.render(noAnim?undefined:[mv.from,mv.to]);moveSound(mv,g);
+    if(mv.captured==='q'){const hadCrown=!!st.crownQ;st.crownQ=false;await queenCapture(mv,hadCrown);if(mv.piece==='p'||hadCrown)st.crowns[mv.to]=1;board.skipAnim=true}
+    board.last=[mv.from,mv.to];board.arrows=[];
+    if(stolen){st.crownHide=mv.to;board.render(noAnim?undefined:[mv.from,mv.to]);moveSound(mv,g);await crownSteal(capSq,mv.to);st.crownHide=null;st.crowns[mv.to]=1;board.render()}
+    else{board.render(noAnim?undefined:[mv.from,mv.to]);moveSound(mv,g)}
     if(checkOver()){sendReady();return}
     render();
     await weather();
@@ -885,7 +937,7 @@ function StormRun(opt){
     if(k==='ufoBack')st.ufo=null;
     {const r0=$('#board').getBoundingClientRect();if(r0.top<0||r0.bottom>innerHeight){$('#board').scrollIntoView({block:'center'});await sleep(250)}}
     const rect=$('#board').getBoundingClientRect();
-    const ctx={...X,res,map0,flip:board.flip,last:board.last,rect,fogZ,hide2D:h=>{$('#board').style.visibility=h?'hidden':''}};
+    const ctx={...X,res,map0,flip:board.flip,last:board.last,rect,fogZ,crowns:Object.keys(st.crowns),hide2D:h=>{$('#board').style.visibility=h?'hidden':''}};
     board.sel=null;board.render();
     try{await play3D(k,ctx)}catch(e){console.warn('storm 3D failed',e);$('#board').style.visibility='';try{W3.on=false;W3.cv&&(W3.cv.style.display='none');W3.ui&&(W3.ui.style.display='none')}catch(_){}await play2D(k,ctx)}
     if(!me.alive){$('#board').style.visibility='';return}
@@ -898,6 +950,7 @@ function StormRun(opt){
     if(res.secret){st.secret={...res.secret,show:false,until:ply+6};}
     for(const c of res.ch)if(c.t==='move'&&st.frozen[c.from]){st.frozen[c.to]=st.frozen[c.from];delete st.frozen[c.from]}
     for(const c of res.ch)if(c.t==='kill')delete st.frozen[c.sq];
+    {const nc={};for(const k of Object.keys(st.crowns)){const mvd=res.ch.find(c=>c.t==='move'&&c.from===k);const kil=res.ch.find(c=>c.t==='kill'&&c.sq===k);if(kil)continue;nc[mvd?mvd.to:k]=1}st.crowns=nc}
     board.render();
     if(k!=='ufoBack'){S.storm.seen[k]=(S.storm.seen[k]||0)+1;save()}
     log.push({e:`${ev.i} ${esc(res.note)}`});
@@ -906,18 +959,42 @@ function StormRun(opt){
     if(g.in_check())snd&&snd('check');
   }
   /* replays the capture as a 3D cutscene: the 2D board still shows the position before the move */
-  async function queenCapture(mv){
+  async function queenCapture(mv,hadCrown){
     if(!me.alive)return;busy=true;
     const u=g.undo();if(!u)return;const map0=mapOf(g);const last0=board.last;g.move({from:u.from,to:u.to,promotion:u.promotion});
     board.sel=null;
     {const r0=$('#board').getBoundingClientRect();if(r0.top<0||r0.bottom>innerHeight){$('#board').scrollIntoView({block:'center'});await sleep(250)}}
     const ctx={turn:g.turn(),fen:g.fen(),res:{fen:g.fen(),ch:[]},map0,flip:board.flip,last:last0,rect:$('#board').getBoundingClientRect(),
-      qc:{from:mv.from,to:mv.to,p:mv.piece},cap:qcapCaption(mv.piece),before2D:()=>{board.last=[mv.from,mv.to];board.arrows=[];board.skipAnim=true;board.render()},hide2D:h=>{$('#board').style.visibility=h?'hidden':''}};
+      qc:{from:mv.from,to:mv.to,p:mv.piece},cap:qcapCaption(mv.piece),crowns:[...Object.keys(st.crowns).map(k=>k===mv.to?mv.from:k),...(hadCrown?[mv.to]:[])],
+      before2D:()=>{if(mv.piece==='p'||hadCrown)st.crowns[mv.to]=1;board.last=[mv.from,mv.to];board.arrows=[];board.skipAnim=true;board.render()},hide2D:h=>{$('#board').style.visibility=h?'hidden':''}};
     try{await play3D('qcap',ctx)}catch(e){console.warn('capture 3D failed',e);$('#board').style.visibility='';try{W3.on=false;W3.cv&&(W3.cv.style.display='none');W3.ui&&(W3.ui.style.display='none')}catch(_){}await play2D('qcap',ctx)}
     $('#board').style.visibility='';
     if(me.alive){S.storm.qcap=S.storm.qcap||{};S.storm.qcap[mv.piece]=(S.storm.qcap[mv.piece]||0)+1;save();log.push({e:`${QCAP[mv.piece].i} ${QCAP[mv.piece].n}`})}
   }
   me._mv=(from,to)=>{if(busy||over)return'busy';const mv=g.move({from,to,promotion:'q'});if(!mv)return'illegal';afterMove(mv);return'ok'};
+  async function crownSteal(fromSq,toSq){
+    const sqEl=sq=>{for(let i=0;i<64;i++)if(board.idxToSq(i)===sq)return board.sqs[i];return null};
+    const a=sqEl(fromSq).getBoundingClientRect(),b=sqEl(toSq).getBoundingClientRect();
+    const w=a.width*.6,h=a.width*.45;
+    let im;if(CR.ready){im=document.createElement('canvas');im.width=120;im.height=90;im.className='wxFly wxCrownC'}else{im=document.createElement('img');im.src=CROWN_SVG;im.className='wxFly'}
+    im.style.width=w+'px';im.style.height=h+'px';
+    const x0=a.left+a.width*.2,y0=a.top-a.width*.12,x1=b.left+b.width*.2,y1=b.top-b.width*.12;
+    im.style.left=x0+'px';im.style.top=y0+'px';document.body.appendChild(im);
+    tone(880,.15,{type:'triangle',g:.08});tone(1320,.25,{type:'triangle',g:.06,delay:.12});
+    const up=Math.max(a.width*1.3,60);
+    const an=im.animate([
+      {transform:'translate(0,0) rotate(0) scale(1)'},
+      {transform:`translate(${(x1-x0)*.35}px,${-up+(y1-y0)*.35}px) rotate(200deg) scale(1.7)`,offset:.45},
+      {transform:`translate(${(x1-x0)*.8}px,${-up*.55+(y1-y0)*.8}px) rotate(330deg) scale(1.35)`,offset:.75},
+      {transform:`translate(${x1-x0}px,${y1-y0}px) rotate(360deg) scale(1)`}
+    ],{duration:1150,easing:'cubic-bezier(.3,.6,.4,1)'});
+    /* sparkles */
+    for(let i=0;i<14;i++){const sp=document.createElement('span');sp.className='wxSpark';sp.textContent=['✨','⭐','💛'][i%3];sp.style.left=(x0+w/2)+'px';sp.style.top=(y0+h/2)+'px';document.body.appendChild(sp);
+      const ang=Math.random()*Math.PI*2,d=40+Math.random()*70;sp.animate([{transform:'translate(0,0) scale(.4)',opacity:1},{transform:`translate(${Math.cos(ang)*d}px,${Math.sin(ang)*d-30}px) scale(1.1)`,opacity:0}],{duration:900+Math.random()*400,easing:'ease-out',delay:i*25}).onfinish=()=>sp.remove()}
+    await new Promise(r=>{an.onfinish=r;setTimeout(r,1400)});
+    [523,659,784].forEach((f,i)=>tone(f,.4,{type:'triangle',g:.07,delay:i*.07}));
+    im.remove();
+  }
   function W3flipZ(rank){/* rank 1..8 → world z of that rank's centre (for fog planes) */const r=rank-1;return board.flip?r-3.5:3.5-r}
 
   async function botMove(){
@@ -1023,15 +1100,17 @@ function galleryPick(){
   const caps=['p','n','b','r','q','k'];
   modal(`<h2>🎬 Галерея анімацій</h2><div style="text-align:left;max-height:62vh;overflow:auto">
     <h4 style="margin:4px 0 6px">💥 Взяття ферзя</h4><div class="list">${caps.map(p=>`<div class="it" data-gq="${p}"><img src="${PIC('w',p)}" width="28"><span class="nm">${QCAP[p].n}</span><span class="tag" style="background:var(--gold);color:#111">${'★'.repeat(QTIER[p])}${'☆'.repeat(4-QTIER[p])}</span></div>`).join('')}</div>
+    <h4 style="margin:12px 0 6px">👑 Корона</h4><div class="list"><div class="it" data-gc="1"><img src="${CROWN_SVG}" width="28"><span class="nm">Хтось збиває пішака з короною і забирає її</span></div></div>
     <h4 style="margin:12px 0 6px">🌪 Погода</h4><div class="list">${list.map(k=>`<div class="it" data-gk="${k}"><span style="font-size:22px;width:30px;text-align:center">${EVENTS[k].i}</span><span class="nm">${EVENTS[k].n}${k==='ufoBack'?' (повернення)':''}</span><span class="tag" style="background:${RAR[EVENTS[k].rar].col};color:#111">${RAR[EVENTS[k].rar].n}</span></div>`).join('')}</div></div>
     <button class="btn g" style="width:100%;margin-top:10px" onclick="closeModal()">Закрити</button>`);
   document.querySelectorAll('[data-gk]').forEach(e=>e.onclick=()=>{closeModal();galleryRun(GAL_FEN,r=>r._ev(e.dataset.gk,{type:'b',color:'b'}))});
   document.querySelectorAll('[data-gq]').forEach(e=>e.onclick=()=>{closeModal();const d=CAPDEMO[e.dataset.gq];galleryRun(d.fen,r=>r._mv(d.m[0],d.m[1]))});
+  document.querySelectorAll('[data-gc]').forEach(e=>e.onclick=()=>{closeModal();galleryRun('4k3/pp4pp/4p3/3P4/8/8/PP4PP/4K3 b - - 0 1',r=>r._mv('e6','d5'),{d5:1})});
 }
-function galleryRun(fen,act){
+function galleryRun(fen,act,crowns){
   if(CUR&&CUR.busy&&CUR.busy()){toast('Зачекай, поки закінчиться поточна анімація');return}
   if(CUR&&CUR.stop)CUR.stop();
-  CUR=StormRun({mode:'friend',freq:'rare',gallery:true,noPick:true,fen});
+  CUR=StormRun({mode:'friend',freq:'rare',gallery:true,noPick:true,fen,crowns});
   const run=CUR;setTimeout(()=>{if(CUR===run)act(run)},700);
 }
 function openGallery(){closeModal();showView('storm');panel('🌪 Шахи-Буря','','');CUR=StormRun({mode:'friend',freq:'rare',gallery:true,fen:GAL_FEN})}
