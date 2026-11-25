@@ -725,6 +725,71 @@ async function play2D(evk,X){
   await sleep(X.speed>1?900:2200);b.classList.remove('wxShake');u.classList.remove('capOn','on');u.style.display='none';
 }
 
+/* ================= MINI WEATHER (2D, about one second, right on the normal board) ================= */
+async function playMini(k,X){
+  const B=$('#board'),br=B.getBoundingClientRect(),sz=br.width/8;const ev=EVENTS[k];const res=X.res||{ch:[]};
+  const lay=document.createElement('div');lay.className='wxMini';B.appendChild(lay);
+  const sqEl=sq=>{for(let i=0;i<64;i++)if(board.idxToSq(i)===sq)return board.sqs[i];return null};
+  const pos=sq=>{const r=sqEl(sq).getBoundingClientRect();return{x:r.left-br.left,y:r.top-br.top}};
+  const done=[];const A=(e,kf,o)=>{const a=e.animate(kf,{fill:'forwards',easing:'ease-in-out',...o});done.push(a.finished.catch(()=>{}));return a};
+  const el=(cls,html,css)=>{const d=document.createElement('div');d.className=cls;if(html!=null)d.innerHTML=html;if(css)d.style.cssText=css;lay.appendChild(d);return d};
+  const emo=(ch,size,x,y)=>el('wxFx',ch,`left:${x}px;top:${y}px;font-size:${size}px;line-height:1;transform-origin:center`);
+  /* a copy of the piece that can fly around; the real one is hidden until the new position is drawn */
+  const clone=(sq,p)=>{const s=sqEl(sq);let src=null;if(s){const im=s.querySelector('img.pc');if(im){im.style.visibility='hidden';src=im.src}s.querySelectorAll('.wxCrown').forEach(c=>c.style.visibility='hidden')}
+    if(p)src=PIC(p.color,p.type);if(!src)return null;const c=document.createElement('img');c.src=src;c.className='wxMp';const q=pos(sq);c.style.cssText=`left:${q.x}px;top:${q.y}px;width:${sz}px;height:${sz}px`;lay.appendChild(c);return c};
+  const lab=el('wxLab',`${ev.i} ${esc(ev.n)}`);
+  A(lab,[{opacity:0,transform:'translate(-50%,-8px)'},{opacity:1,transform:'translate(-50%,0)',offset:.15},{opacity:1,offset:.8},{opacity:0,transform:'translate(-50%,0)'}],{duration:1150});
+  const flash=(col,op,d,delay=0)=>{const f=el('wxFx','',`inset:0;background:${col}`);A(f,[{opacity:0},{opacity:op,offset:.15},{opacity:0}],{duration:d,delay})};
+  const shake=(amp,d,delay=0)=>A(B,[0,1,2,3,4,5,6,7,8].map(i=>({transform:i===8?'none':`translate(${(Math.random()-.5)*amp}px,${(Math.random()-.5)*amp}px) rotate(${(Math.random()-.5)*amp*.15}deg)`})),{duration:d,delay,easing:'linear',fill:'none'});
+  /* how the pieces change (second half of the second) */
+  const pieces=(delay=450,dur=550)=>{for(const c of res.ch){
+    if(c.t==='move'&&c.how!=='crow'&&c.how!=='blink'){const m=clone(c.from);if(!m)continue;const a=pos(c.from),b=pos(c.to);const dx=b.x-a.x,dy=b.y-a.y;const h=c.how==='hop'?sz*.35:sz*.9;
+      A(m,[{transform:'translate(0,0) scale(1) rotate(0)'},{transform:`translate(${dx*.5}px,${dy*.5-h}px) scale(1.25) rotate(${c.how==='hop'?0:200}deg)`},{transform:`translate(${dx}px,${dy}px) scale(1) rotate(${c.how==='hop'?0:360}deg)`}],{duration:dur,delay})}
+    if(c.t==='kill'){const m=clone(c.sq);if(!m)continue;
+      if(c.how==='burn')A(m,[{filter:'brightness(1)',transform:'scale(1)',opacity:1},{filter:'brightness(0)',transform:'scale(1.1)',opacity:1,offset:.4},{filter:'brightness(0)',transform:'scale(.2) rotate(40deg)',opacity:0}],{duration:dur,delay});
+      else if(c.how==='zap')A(m,[{transform:'translateY(0) rotate(0)',opacity:1},{transform:`translateY(${-sz*3}px) rotate(540deg)`,opacity:0}],{duration:dur,delay,easing:'ease-in'});
+      else if(c.how==='smash'){const ang=Math.random()*Math.PI*2;A(m,[{transform:'translate(0,0) rotate(0)',opacity:1},{transform:`translate(${Math.cos(ang)*sz*3}px,${Math.sin(ang)*sz*3}px) rotate(${(Math.random()-.5)*900}deg) scale(.4)`,opacity:0}],{duration:dur,delay,easing:'ease-out'})}
+      else A(m,[{transform:'translate(0,0) rotate(0)',opacity:1},{transform:`translate(${sz*4}px,${-sz*5}px) rotate(720deg) scale(.5)`,opacity:0}],{duration:dur,delay,easing:'ease-in'})}
+    if(c.t==='add'){const m=clone(c.sq,c.p);if(!m)continue;m.style.opacity=0;A(m,[{transform:`translateY(${-sz*3}px) rotate(-360deg)`,opacity:0},{transform:'translateY(0) rotate(0)',opacity:1}],{duration:dur,delay,easing:'cubic-bezier(.3,1.4,.5,1)'})}
+  }};
+  const W=br.width,mid=W/2;
+  if(k==='tornado'){SFX.wind(1.3);const t=emo('🌪',sz*2.6,-sz*3,mid-sz*1.3);A(t,[{transform:'translateX(0) rotate(0)'},{transform:`translateX(${W+sz*4}px) rotate(1080deg)`}],{duration:1050,easing:'ease-in-out'});
+    A(B,[{transform:'rotate(0)'},{transform:'rotate(-2.5deg)',offset:.35},{transform:'rotate(2deg)',offset:.65},{transform:'rotate(0)'}],{duration:1000,fill:'none'});pieces(300,650)}
+  else if(k==='lightning'){SFX.thunder();flash('#fff',.85,350);
+    res.ch.forEach((c,i)=>{const q=pos(c.sq);const bolt=el('wxFx',`<svg viewBox="0 0 40 160" width="${sz*.7}" height="${q.y+sz}"><polyline points="22,0 12,60 26,62 8,160 30,78 16,76 28,0" fill="#fff9c4" stroke="#ffd54a" stroke-width="3"/></svg>`,`left:${q.x+sz*.15}px;top:0;filter:drop-shadow(0 0 8px #fff)`);
+      A(bolt,[{opacity:0},{opacity:1,offset:.1},{opacity:1,offset:.3},{opacity:0}],{duration:600,delay:i*150})});pieces(250,600)}
+  else if(k==='crow'){SFX.caw();const c=res.ch[0];
+    if(c){const a=pos(c.from),b=pos(c.to);const bird=emo('🐦‍⬛',sz*.9,-sz,-sz);const m=clone(c.from);
+      A(bird,[{transform:'translate(0,0)'},{transform:`translate(${a.x+sz*1.05}px,${a.y+sz*.6}px)`,offset:.35},{transform:`translate(${b.x+sz*1.05}px,${b.y+sz*.6}px)`,offset:.75},{transform:`translate(${W+sz*2}px,${-sz*2}px)`}],{duration:1100,easing:'linear'});
+      if(m)A(m,[{transform:'translate(0,0)'},{transform:'translate(0,0)',offset:.35},{transform:`translate(${(b.x-a.x)*.5}px,${(b.y-a.y)*.5-sz*.8}px) rotate(-20deg)`,offset:.55},{transform:`translate(${b.x-a.x}px,${b.y-a.y}px)`,offset:.75},{transform:`translate(${b.x-a.x}px,${b.y-a.y}px)`}],{duration:1100,easing:'linear'})}
+    else{const bird=emo('🐦‍⬛',sz*.9,-sz,mid);A(bird,[{transform:'translate(0,0)'},{transform:`translate(${W+sz*2}px,${-sz*3}px)`}],{duration:1000})}}
+  else if(k==='fog'){SFX.wind(1.2);const f=el('wxFx','',`left:0;right:0;top:0;height:100%;background:linear-gradient(180deg,rgba(215,220,226,.0),rgba(215,220,226,.85) 30%,rgba(215,220,226,.85) 70%,rgba(215,220,226,0));backdrop-filter:blur(4px)`);
+    A(f,[{transform:'translateY(-100%)',opacity:1},{transform:'translateY(0)',opacity:1,offset:.6},{transform:'translateY(0)',opacity:0}],{duration:1050})}
+  else if(k==='quake'){SFX.rumble(1.3);shake(sz*.35,900);
+    if(res.rank!=null){const y=pos(sqN(0,res.rank)).y;const crack=el('wxFx','',`left:0;right:0;top:${y+sz/2-2}px;height:4px;background:#3a2a1a;box-shadow:0 0 6px #000`);A(crack,[{transform:'scaleX(0)'},{transform:'scaleX(1)',offset:.4},{transform:'scaleX(1)',opacity:1,offset:.85},{opacity:0}],{duration:1000})}
+    pieces(350,550)}
+  else if(k==='frost'){SFX.freeze();const f=el('wxFx','',`inset:0;box-shadow:inset 0 0 ${sz*1.5}px ${sz*.4}px rgba(200,240,255,.95)`);A(f,[{opacity:0},{opacity:1,offset:.4},{opacity:0}],{duration:1050});
+    (res.freeze||[]).forEach((sq,i)=>{const q=pos(sq);for(let j=0;j<6;j++){const sn=emo('❄',sz*.35,q.x+sz*.35,q.y+sz*.3);const a=Math.random()*6.28;A(sn,[{transform:'translate(0,0) scale(.3)',opacity:1},{transform:`translate(${Math.cos(a)*sz*.7}px,${Math.sin(a)*sz*.7}px) scale(1)`,opacity:0}],{duration:800,delay:200+i*120+j*30})}
+      const ice=el('wxFx','',`left:${q.x+sz*.05}px;top:${q.y+sz*.05}px;width:${sz*.9}px;height:${sz*.9}px;border-radius:12%;background:linear-gradient(135deg,rgba(215,245,255,.7),rgba(120,190,235,.4))`);A(ice,[{transform:'scale(0)'},{transform:'scale(1.1)',offset:.7},{transform:'scale(1)'}],{duration:500,delay:300+i*120})})}
+  else if(k==='ufo'||k==='ufoBack'){SFX.ufo();const c=res.ch[0];const sq=c?(c.sq):'e5';const q=pos(sq);
+    const ufo=emo('🛸',sz*1.1,q.x-sz*.05,-sz*1.5);A(ufo,[{transform:'translateY(0)'},{transform:`translateY(${q.y-sz*.2+sz*1.5}px)`,offset:.35},{transform:`translateY(${q.y-sz*.2+sz*1.5}px)`,offset:.75},{transform:`translateY(${-sz}px)`}],{duration:1150});
+    const beam=el('wxFx','',`left:${q.x+sz*.1}px;top:${sz*.0}px;width:${sz*.8}px;height:${q.y+sz}px;background:linear-gradient(180deg,rgba(143,246,208,0),rgba(143,246,208,.55));clip-path:polygon(35% 0,65% 0,100% 100%,0 100%)`);
+    A(beam,[{opacity:0},{opacity:0,offset:.3},{opacity:1,offset:.4},{opacity:1,offset:.75},{opacity:0}],{duration:1150});pieces(420,520)}
+  else if(k==='rainbow'){SFX.chime();const r=el('wxFx','',`left:-10%;right:-10%;top:15%;height:${W*.9}px;border-radius:50% 50% 0 0;background:radial-gradient(circle at 50% 100%,transparent 52%,rgba(255,59,48,.55) 53%,rgba(255,149,0,.55) 57%,rgba(255,204,0,.55) 61%,rgba(52,199,89,.55) 65%,rgba(48,176,255,.55) 69%,rgba(88,86,214,.55) 73%,transparent 74%)`);
+    A(r,[{opacity:0,transform:'translateY(10%)'},{opacity:1,transform:'translateY(0)',offset:.4},{opacity:0}],{duration:1100});pieces(350,500)}
+  else if(k==='watcher'){SFX.flick();const d=el('wxFx','',`inset:0;background:#000`);A(d,[{opacity:0},{opacity:.96,offset:.2},{opacity:.96,offset:.75},{opacity:0}],{duration:1150});
+    const eyes=emo('👁️👁️',sz*.8,mid-sz*.9,mid-sz*.5);A(eyes,[{opacity:0},{opacity:0,offset:.25},{opacity:1,offset:.4},{opacity:1,offset:.65},{opacity:0,offset:.75}],{duration:1150});
+    setTimeout(()=>{for(const c of res.ch){if(c.t!=='move')continue;const m=clone(c.from);if(!m)continue;const a=pos(c.from),b=pos(c.to);m.style.transform=`translate(${b.x-a.x}px,${b.y-a.y}px)`}},500);
+    setTimeout(()=>SFX.flick(),850)}
+  else if(k==='meteor'){const blk=(res.block||['d4','e4','d5','e5']).map(pos);const cx=blk.reduce((a,b)=>a+b.x,0)/4+sz/2,cy=blk.reduce((a,b)=>a+b.y,0)/4+sz/2;
+    noise(.6,{type:'bandpass',f:300,f2:1500,g:.4,att:.4});const m=emo('☄️',sz*1.4,-sz*2,-sz*2);A(m,[{transform:'translate(0,0) rotate(0)'},{transform:`translate(${cx+sz*1.3}px,${cy+sz*1.3}px) rotate(20deg)`}],{duration:420,easing:'ease-in'});
+    setTimeout(()=>{SFX.boom();m.style.display='none'},420);flash('#ffb347',.9,450,420);shake(sz*.5,500,420);
+    const ring=el('wxFx','',`left:${cx-sz*2}px;top:${cy-sz*2}px;width:${sz*4}px;height:${sz*4}px;border-radius:50%;border:${sz*.15}px solid rgba(255,220,140,.9)`);A(ring,[{transform:'scale(.1)',opacity:1},{transform:'scale(1.4)',opacity:0}],{duration:600,delay:420,easing:'ease-out'});
+    pieces(440,600)}
+  else pieces(200,600);
+  await Promise.all(done);await sleep(30);lay.remove();
+}
+
 /* ================= GAME RUN ================= */
 const CSS=`
 #stormCv{position:fixed;inset:0;z-index:900;display:none;touch-action:none}
@@ -752,6 +817,10 @@ const CSS=`
 .sq .wxCrown{position:absolute;left:20%;top:-12%;width:60%;height:45%;z-index:5;pointer-events:none;filter:drop-shadow(0 1px 1px rgba(0,0,0,.45))}
 .wxFly{position:fixed;z-index:950;pointer-events:none;filter:drop-shadow(0 0 10px rgba(255,210,80,.9))}
 .wxSpark{position:fixed;z-index:951;pointer-events:none;font-size:16px}
+.wxMini{position:absolute;inset:0;z-index:30;pointer-events:none;overflow:hidden}
+.wxMini .wxMp{position:absolute;pointer-events:none}
+.wxMini .wxFx{position:absolute;pointer-events:none}
+.wxMini .wxLab{position:absolute;left:50%;top:6px;background:rgba(0,0,0,.72);color:#fff;font-weight:800;padding:4px 14px;border-radius:999px;font-size:calc(var(--bs)/30);white-space:nowrap;z-index:5;transform:translateX(-50%)}
 .wxOmen{background:rgba(247,198,49,.12);border:1px dashed var(--gold);border-radius:6px;padding:8px 10px;font-size:14px;margin-bottom:8px}
 `;
 let cssDone=false;function css(){if(cssDone)return;cssDone=true;const s=document.createElement('style');s.textContent=CSS;document.head.appendChild(s)}
@@ -950,7 +1019,8 @@ function StormRun(opt){
     const rect=$('#board').getBoundingClientRect();
     const ctx={...X,res,map0,flip:board.flip,last:board.last,rect,fogZ,crowns:Object.keys(st.crowns),speed:opt.gallery&&GAL_FULL?1:MINI,hide2D:h=>{$('#board').style.visibility=h?'hidden':''}};
     board.sel=null;board.render();
-    try{await play3D(k,ctx)}catch(e){console.warn('storm 3D failed',e);$('#board').style.visibility='';try{W3.on=false;W3.cv&&(W3.cv.style.display='none');W3.ui&&(W3.ui.style.display='none')}catch(_){}await play2D(k,ctx)}
+    if(!(opt.gallery&&GAL_FULL)){board.sel=null;await playMini(k,ctx);board.skipAnim=true}
+    else try{await play3D(k,ctx)}catch(e){console.warn('storm 3D failed',e);$('#board').style.visibility='';try{W3.on=false;W3.cv&&(W3.cv.style.display='none');W3.ui&&(W3.ui.style.display='none')}catch(_){}await play2D(k,ctx)}
     if(!me.alive){$('#board').style.visibility='';return}
     /* apply */
     if(res.fen!==g.fen()){g=new Chess(res.fen);board.set(g)}

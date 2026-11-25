@@ -28,6 +28,15 @@ button{font-family:inherit}
 #nav a:hover{background:#1c1b19}
 #nav a.on{background:#1c1b19;color:#fff;box-shadow:inset 3px 0 0 var(--green)}
 #nav a .ic{width:22px;text-align:center;font-size:18px}
+/* the "secret" Storm tab: easy to spot, looks forbidden */
+#nav a.secret{position:relative;margin:6px 8px;border-radius:8px;color:#efe2ff;background:linear-gradient(120deg,#25133d,#3d1d63 55%,#25133d);background-size:220% 100%;box-shadow:0 0 0 1px #8c5cff,0 0 14px rgba(140,92,255,.55);animation:secGlow 2.6s ease-in-out infinite,secShift 6s linear infinite}
+#nav a.secret:hover{filter:brightness(1.15)}
+#nav a.secret.on{box-shadow:0 0 0 2px #b78cff,0 0 18px rgba(183,140,255,.8)}
+#nav a.secret .sec{position:absolute;top:-7px;right:6px;background:#ff3b5c;color:#fff;font-size:9px;font-weight:900;letter-spacing:.08em;padding:1px 5px;border-radius:4px;transform:rotate(4deg);box-shadow:0 1px 4px rgba(0,0,0,.5)}
+@keyframes secGlow{0%,100%{box-shadow:0 0 0 1px #8c5cff,0 0 10px rgba(140,92,255,.4)}50%{box-shadow:0 0 0 1px #c9a6ff,0 0 20px rgba(170,120,255,.85)}}
+@keyframes secShift{0%{background-position:0% 0}100%{background-position:220% 0}}
+.secCard{background:linear-gradient(140deg,#1d1030,#3a1b5e);border:2px solid #8c5cff;box-shadow:0 0 18px rgba(140,92,255,.45);position:relative;overflow:hidden}
+.secCard .stamp{position:absolute;top:10px;right:-28px;transform:rotate(35deg);background:#ff3b5c;color:#fff;font-weight:900;font-size:11px;letter-spacing:.12em;padding:3px 34px}
 #nav .me{margin-top:auto;padding:12px 14px;border-top:1px solid #33312e;font-size:13px;color:var(--mut)}
 #nav .me b{color:#fff}
 .xpbar{height:8px;background:#3c3a37;border-radius:4px;overflow:hidden;margin-top:6px}
@@ -165,6 +174,8 @@ button{font-family:inherit}
   #nav a .ic{font-size:21px;width:auto}
   #nav a.on{box-shadow:inset 0 3px 0 var(--green);background:#1c1b19;color:#fff}
   #nav a .tag{position:absolute;margin:-4px 0 0 26px}
+  #nav a.secret{margin:4px 3px;min-width:70px;border-radius:8px}
+  #nav a.secret .sec{top:1px;right:2px;font-size:7px;padding:0 3px}
   #main{flex-direction:column;align-items:stretch;padding:0;gap:0}
   #boardArea{gap:0;width:100%;justify-content:center}
   #evalbar{width:12px;margin:36px 0;border-radius:0}
@@ -198,7 +209,7 @@ button{font-family:inherit}
     <a data-v="home" class="on"><span class="ic">🏠</span>Шлях</a>
     <a data-v="mygames"><span class="ic">🔍</span>Мої партії</a>
     <a data-v="play"><span class="ic">⚔️</span>Гра</a>
-    <a data-v="storm"><span class="ic">🌪</span>Шахи-Буря</a>
+    <a data-v="storm" class="secret" title="Секретний режим"><span class="ic">🌪</span>Шахи-Буря<span class="sec">СЕКРЕТ</span></a>
     <a data-v="puzzles"><span class="ic">🧩</span>Задачі</a>
     <a data-v="openings"><span class="ic">📖</span>Дебюти</a>
     <a data-v="vision"><span class="ic">👁</span>Бачення</a>
@@ -238,7 +249,7 @@ button{font-family:inherit}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="pieces.js"></script>
 <script src="masters.js"></script>
-<script src="storm.js?v=1.6.0" defer></script>
+<script src="storm.js?v=1.6.1" defer></script>
 <script>
 "use strict";
 /* ================= UTIL ================= */
@@ -700,7 +711,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='1.6.0';
+const APP_VERSION='1.6.1';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -3062,6 +3073,9 @@ function viewHome(){
       <div class="row"><div class="coach" style="margin:0"><div class="ava"><img src="${PIC('w','n')}"></div></div><div><b style="font-size:17px">Заняття з тренером</b><div class="small mut">Тренер сам веде тебе по всьому</div></div></div>
       <div class="small" style="margin:10px 0">${plan.map((s,i)=>`<div style="margin:3px 0">${i+1}. ${esc(s.n)}</div>`).join('')}</div>
       <button class="btn" id="goSess" style="width:100%">▶ Почати заняття</button></div>
+    <div class="card secCard"><span class="stamp">СЕКРЕТНО</span><h4 style="color:#efe2ff;padding-right:58px">🤫 Секретний режим: Шахи-Буря 🌪</h4>
+      <div class="small" style="color:#d9c8f5;margin:6px 0 10px">Звичайні шахи, поки не зміниться погода: торнадо, блискавка, НЛО, метеорит… Грай з ботом, з другом поруч або по мережі. А якщо пішак збʼє ферзя, отримає корону 👑</div>
+      <button class="btn" id="goStorm" style="width:100%;background:#8c5cff;box-shadow:0 4px 0 #5a35b0">🌪 Відкрити секретний режим</button></div>
     <div class="card">
       <h4>🔥 Сьогоднішній план</h4>
       ${goals.map(([k,n,t])=>`<div class="small row" style="justify-content:space-between;margin-top:6px"><span>${t}</span><span>${Math.min(d[k],n)}/${n} ${d[k]>=n?'✅':''}</span></div><div class="tbar"><i style="width:${Math.min(100,d[k]/n*100)}%;background:var(--green)"></i></div>`).join('')}
@@ -3079,6 +3093,7 @@ function viewHome(){
   </div></div>`;
   document.querySelectorAll('.node').forEach(b=>b.onclick=()=>{snd('click');startLesson(b.dataset.l)});
   $('#goSess').onclick=()=>showView('coach');
+  $('#goStorm').onclick=()=>{snd('click');showView('storm')};
   if($('#goCur'))$('#goCur').onclick=()=>startLesson(curId);
   if($('#goRev'))$('#goRev').onclick=()=>showView('review');
   if($('#goWeak'))$('#goWeak').onclick=()=>{showView('puzzles');startPuzzles(weak[0])};
@@ -3210,6 +3225,8 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '1.6.1':['⚡ Погода тепер відбувається прямо на звичайній 2D-дошці приблизно за секунду, без виходу в 3D',
+           '🤫 Шахи-Буря тепер секретна вкладка: світиться фіолетовим у меню, а на головній є картка, щоб її легко знайти'],
   '1.6.0':['📈 Шахи-Буря: після партії є розбір: точність обох гравців, значки кожного ходу й найкращі ходи',
            '📊 Перед грою можна вибрати, чи показувати значки ходів і смужку переваги (по мережі вибирає господар)',
            '⏱ Нова частота погоди: рівно кожні 30 ходів',
