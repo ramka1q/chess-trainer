@@ -212,6 +212,7 @@ button{font-family:inherit}
     <a data-v="stats"><span class="ic">📊</span>Прогрес</a>
     <div class="me"><div id="meRank"></div><div class="xpbar"><i id="meXp"></i></div><div id="meXpT" class="small" style="margin-top:4px"></div><div id="meElo" class="small" style="margin-top:8px;cursor:pointer" title="Змінити ело"></div><div style="margin-top:8px"><label class="small"><input type="checkbox" id="sndChk" checked> Звук</label></div>
       <div style="margin-top:8px" class="small">🧠 Хто думає:<select id="engSel" style="width:100%;margin-top:3px;background:#1f1e1b;color:#fff;border:1px solid #3c3a37;border-radius:4px;padding:3px"><option value="auto">Авто (найкраще доступне)</option><option value="native">💻 Процесор комп’ютера</option><option value="browser">🌐 Браузер, швидкий (7 МБ)</option><option value="full">🌐 Браузер, повний (80 МБ, сильніший)</option></select>
+      <button id="syBtn" class="btn g sm" style="margin-top:8px;width:100%">🔄 Синхронізація</button>
       <a id="pcDl" class="btn g sm" style="display:none;margin-top:8px;text-align:center;text-decoration:none" href="https://github.com/ramka1q/chess-trainer/releases/latest/download/chess-trainer-pc.zip">⬇ Скачати для ПК (Stockfish 19)</a><div id="engName" class="dim" style="margin-top:3px;font-size:11px"></div></div></div>
   </nav>
   <div id="home"></div>
@@ -256,7 +257,7 @@ const KEY='chesstrainer_v2';
 function defState(){return{xp:0,pr:600,streak:0,bestStreak:0,themes:{},games:[],lessons:{},srs:{},seen:{},days:{},dayStreak:0,lastDay:'',ach:{},sound:true,pzDiff:'easiest',playLevel:1}}
 let S=defState();
 try{S=Object.assign(defState(),JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function save(){S.updatedAt=Date.now();try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}if(typeof syncSoon==='function')syncSoon()}
 function day(){const d=today();if(!S.days[d])S.days[d]={xp:0,pz:0,vis:0,games:0,lines:0,eg:0};return S.days[d]}
 function bump(k,n=1){day()[k]+=n;save();}
 
@@ -671,13 +672,14 @@ function addXP(n,why){
   if(after!==before){setTimeout(()=>{confetti();snd('win');modal(`<div style="font-size:60px">🎖</div><h2>Нове звання: ${after}!</h2><p class="mut">Ти набрав ${S.xp} XP. Так тримати!</p><button class="btn" onclick="closeModal()">Супер</button>`)},600)}
   else if(why)toast(`<span style="color:var(--green)">+${n} XP</span> ${esc(why)}`);
 }
-function updMe(){const{r,nx}=rankOf(S.xp);$('#meRank').innerHTML=`<b>${r[1]}</b> · ${S.xp} XP${S.dayStreak?` · 🔥${S.dayStreak}`:''}`;const pct=nx?((S.xp-r[0])/(nx[0]-r[0])*100):100;$('#meXp').style.width=pct+'%';$('#meXpT').textContent=nx?`до «${nx[1]}»: ${nx[0]-S.xp} XP`:'максимум!';$('#sndChk').checked=S.sound;$('#mtRank').innerHTML=`<b style="color:#fff">${r[1]}</b> · ${S.xp} XP${S.dayStreak?` · 🔥${S.dayStreak}`:''}`;$('#meElo').innerHTML=S.elo?`Твоє ело: <b style="color:#fff">${S.elo}</b> ✎`:'Вказати ело ✎';const due=dueList().length;$('#dueBadge').textContent=due||'';$('#dueBadge').style.display=due?'':'none'}
+function updMe(){const{r,nx}=rankOf(S.xp);$('#meRank').innerHTML=`<b>${r[1]}</b> · ${S.xp} XP${S.dayStreak?` · 🔥${S.dayStreak}`:''}`;const pct=nx?((S.xp-r[0])/(nx[0]-r[0])*100):100;$('#meXp').style.width=pct+'%';$('#meXpT').textContent=nx?`до «${nx[1]}»: ${nx[0]-S.xp} XP`:'максимум!';$('#sndChk').checked=S.sound;if($('#syBtn'))$('#syBtn').innerHTML=(typeof SY!=='undefined'&&SY.token)?`🔄 Синхронізація ✅ <span style="font-weight:500;opacity:.7">${SY.last?new Date(SY.last).toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'}):''}</span>`:'🔄 Синхронізація';$('#mtRank').innerHTML=`<b style="color:#fff">${r[1]}</b> · ${S.xp} XP${S.dayStreak?` · 🔥${S.dayStreak}`:''}`;$('#meElo').innerHTML=S.elo?`Твоє ело: <b style="color:#fff">${S.elo}</b> ✎`:'Вказати ело ✎';const due=dueList().length;$('#dueBadge').textContent=due||'';$('#dueBadge').style.display=due?'':'none'}
 $('#meElo').onclick=()=>askElo(false);
+$('#syBtn').onclick=()=>syncPanel();
 $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,1500)};
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='1.0.1';
+const APP_VERSION='1.1.0';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -2818,6 +2820,179 @@ function viewTest(){
   if($('#tsNew'))$('#tsNew').onclick=async()=>{coachSay('Збираю 21 позицію… <span id="tsP">0</span>/21');try{const set=await buildTestSet(n=>{const e=$('#tsP');if(e)e.textContent=n});S.test={set,attempts:[],created:Date.now()};save();viewTest()}catch(e){coachSay('Не вдалося завантажити позиції. Перевір інтернет.','bad')}};
 }
 
+/* ================= 🔄 SYNC between devices (private GitHub gist) =================
+   The token lives only on this device (separate key, never synced). Progress is merged field by field,
+   so working on two devices offline never loses anything. */
+const SYNC_KEY='chesstrainer_sync',SYNC_FILE='chess-trainer-progress.json',SYNC_DESC='Шаховий тренер — прогрес (не видаляй)';
+const SITE_URL='https://ramka1q.github.io/chess-trainer/';
+var SY={};try{SY=JSON.parse(localStorage.getItem(SYNC_KEY)||'{}')}catch(e){}
+const saveSY=()=>{try{localStorage.setItem(SYNC_KEY,JSON.stringify(SY))}catch(e){}};
+/* settings that belong to one device only */
+const LOCAL_ONLY=['sound','engineMode','skipVer','lastSeenVer','welcomed','visLvl','calcLvl','clk','cctOn','site','nick','impN'];
+function gh(path,opt={}){return fetch('https://api.github.com'+path,{...opt,headers:{Authorization:'Bearer '+SY.token,Accept:'application/vnd.github+json',...(opt.body?{'Content-Type':'application/json'}:{})}})}
+function packState(){
+  const o={};for(const k in S)if(!LOCAL_ONLY.includes(k))o[k]=S[k];
+  /* game reviews are big: send the moves only, the other device re-analyses on open */
+  if(o.myGames){const mg={};for(const id in o.myGames){const{rev,...rest}=o.myGames[id];mg[id]={...rest,rv:rev?0:rest.rv}}o.myGames=mg}
+  return o;
+}
+const mx=(a,b)=>Math.max(a||0,b||0);
+function mergeState(A,B){ /* A = this device, B = remote; returns merged copy */
+  const newer=(B.updatedAt||0)>(A.updatedAt||0)?B:A;const out={...A};
+  for(const k of['elo','startUnit','pzDiff','playLevel','pr','dayStreak','lastDay','streak','visRun','lastSmartGame'])if(newer[k]!==undefined)out[k]=newer[k];
+  for(const k of['xp','bestStreak','visBest','smart'])out[k]=mx(A[k],B[k]);
+  const mapMerge=(a={},b={},f)=>{const o={...a};for(const k in b)o[k]=k in o?f(o[k],b[k]):b[k];return o};
+  out.lessons=mapMerge(A.lessons,B.lessons,(x,y)=>({...x,...y,done:!!(x.done||y.done),stars:mx(x.stars,y.stars),runs:mx(x.runs,y.runs),watched:!!(x.watched||y.watched)}));
+  out.srs=mapMerge(A.srs,B.srs,(x,y)=>x.box>y.box||(x.box===y.box&&x.due>=y.due)?x:y);
+  const cnt=(x,y)=>({ok:mx(x.ok,y.ok),n:mx(x.n,y.n)});
+  out.themes=mapMerge(A.themes,B.themes,cnt);out.strat=mapMerge(A.strat,B.strat,cnt);
+  for(const k of['quiz','cct','calc'])if(A[k]||B[k])out[k]=cnt(A[k]||{},B[k]||{});
+  out.seen=mapMerge(A.seen,B.seen,mx);out.masters=mapMerge(A.masters,B.masters,mx);
+  out.days=mapMerge(A.days,B.days,(x,y)=>{const o={...x};for(const k in y)o[k]=mx(x[k],y[k]);return o});
+  out.ach=mapMerge(A.ach,B.ach,(x,y)=>Math.min(x,y));
+  const byKey=(a=[],b=[],key)=>{const m=new Map();[...a,...b].forEach(x=>{const k=key(x);if(!m.has(k))m.set(k,x)});return[...m.values()]};
+  out.games=byKey(A.games,B.games,g=>g.d).sort((x,y)=>x.d-y.d).slice(-200);
+  out.mist=(()=>{const m=new Map();[...(A.mist||[]),...(B.mist||[])].forEach(x=>{const o=m.get(x.id);if(!o||(x.box||0)>(o.box||0))m.set(x.id,x)});return[...m.values()].slice(-300)})();
+  out.myGames=mapMerge(A.myGames,B.myGames,(x,y)=>(x.rev?x:(y.rev?y:((x.rv||0)>=(y.rv||0)?x:y))));
+  if(A.rush||B.rush)out.rush={best:mx(A.rush&&A.rush.best,B.rush&&B.rush.best),runs:byKey(A.rush&&A.rush.runs,B.rush&&B.rush.runs,r=>r.d).slice(-100)};
+  if(A.wood||B.wood){const a=A.wood,b=B.wood;out.wood=!a?b:!b?a:(a.cycles.length>=b.cycles.length?a:b)}
+  if(A.test||B.test){const a=A.test,b=B.test;const base=!a?b:!b?a:((a.created||0)<=(b.created||0)?a:b);out.test={...base,attempts:byKey(a&&a.attempts,b&&b.attempts,x=>x.d).sort((x,y)=>x.d-y.d)}}
+  out.updatedAt=Math.max(A.updatedAt||0,B.updatedAt||0);
+  return out;
+}
+let syncT=null,syncBusy=false,syncQuiet=false;
+function syncSoon(){if(!SY||!SY.token||!SY.gist||syncQuiet)return;clearTimeout(syncT);syncT=setTimeout(()=>syncNow(),4000)}
+async function readGist(){
+  const r=await gh('/gists/'+SY.gist);if(!r.ok)throw new Error('GitHub '+r.status);const j=await r.json();const f=j.files[SYNC_FILE];if(!f)return null;
+  const txt=f.truncated?await (await fetch(f.raw_url)).text():f.content;return JSON.parse(txt||'{}');
+}
+async function syncNow(manual){
+  if(!SY.token||!SY.gist||syncBusy)return;syncBusy=true;
+  try{
+    const remote=await readGist();
+    const before=JSON.stringify(packState());
+    const local={};for(const k in S)local[k]=S[k];
+    const merged=remote?mergeState(local,remote):local;
+    for(const k in merged)if(!LOCAL_ONLY.includes(k))S[k]=merged[k];
+    const changed=JSON.stringify(packState())!==before;
+    syncQuiet=true;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}syncQuiet=false;
+    const body=JSON.stringify({files:{[SYNC_FILE]:{content:JSON.stringify(packState())}}});
+    const r=await gh('/gists/'+SY.gist,{method:'PATCH',body});if(!r.ok)throw new Error('GitHub '+r.status);
+    SY.last=Date.now();SY.err='';saveSY();updMe();
+    /* something arrived from the other device: refresh overview pages (never interrupt a running exercise) */
+    if(changed&&$('#home').style.display!=='none'&&$('#modal').style.display!=='flex'){const v=document.querySelector('#nav a.on');if(v&&['home','stats','review','mygames','test'].includes(v.dataset.v))showView(v.dataset.v)}
+    if(manual)toast('✅ Прогрес синхронізовано');
+  }catch(e){SY.err=String(e.message||e);saveSY();if(manual)toast('❌ Синхронізація: '+esc(SY.err),5000)}
+  syncBusy=false;
+}
+async function syncConnect(token){
+  SY.token=token.trim();
+  const u=await gh('/user');if(!u.ok){SY.token='';throw new Error(u.status===401?'ключ неправильний або прострочений':'GitHub '+u.status)}
+  const me_=await u.json();
+  /* reuse the trainer gist if it already exists, otherwise create a private one */
+  let gid=null;for(let page=1;page<=5&&!gid;page++){const r=await gh('/gists?per_page=100&page='+page);if(!r.ok)break;const L=await r.json();if(!L.length)break;const f=L.find(g=>g.files&&g.files[SYNC_FILE]);if(f)gid=f.id}
+  if(!gid){const r=await gh('/gists',{method:'POST',body:JSON.stringify({description:SYNC_DESC,public:false,files:{[SYNC_FILE]:{content:JSON.stringify(packState())}}})});if(!r.ok)throw new Error('не вдалося створити сховище (GitHub '+r.status+'). Перевір, що ключ має дозвіл «gist».');gid=(await r.json()).id}
+  SY.gist=gid;SY.login=me_.login;saveSY();await syncNow();
+}
+function pairLink(){return SITE_URL+'#pair='+btoa(unescape(encodeURIComponent(JSON.stringify({t:SY.token,g:SY.gist}))))}
+async function showQR(){
+  if(!window.QRCode){await new Promise((res,rej)=>{const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';sc.onload=res;sc.onerror=rej;document.head.appendChild(sc)})}
+  modal(`<div style="font-size:40px">📱</div><h2>Підключи телефон</h2><p class="mut small">Відкрий камеру на телефоні й наведи на код. Відкриється тренер, і прогрес підтягнеться сам. Більше нічого вводити не треба.</p>
+    <div id="qrWrap" style="position:relative;display:inline-block;margin:8px 0;cursor:pointer;user-select:none">
+      <div id="qrBox" style="background:#fff;padding:12px;border-radius:10px;filter:blur(14px);transition:filter .35s"></div>
+      <div id="qrHint" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#222;font-weight:800;text-align:center;padding:20px">
+        <div style="background:#fff;border-radius:10px;padding:10px 14px;box-shadow:0 4px 14px #0004">🔒 Натисни <b id="qrLeft">3</b> рази,<br>щоб показати код</div></div></div>
+    <p class="small" style="color:var(--orange)">⚠️ Цей код — ключ до твого прогресу. Не показуй і не надсилай його іншим людям.</p>
+    <button class="btn" onclick="closeModal()" style="width:100%">Готово</button>`);
+  new QRCode($('#qrBox'),{text:pairLink(),width:240,height:240,correctLevel:QRCode.CorrectLevel.L});
+  let taps=0;$('#qrWrap').onclick=()=>{if(taps>=3)return;taps++;snd('click');const left=3-taps;
+    if(left>0){$('#qrLeft').textContent=left;$('#qrBox').style.filter=`blur(${14-taps*3}px)`}
+    else{$('#qrBox').style.filter='none';$('#qrHint').remove()}};
+}
+function syncPanel(){
+  const on=SY.token&&SY.gist;
+  modal(on?`<div style="font-size:44px">🔄</div><h2>Синхронізація увімкнена</h2>
+    <p class="mut small">Акаунт GitHub: <b>${esc(SY.login||'?')}</b>. Остання синхронізація: <b>${SY.last?new Date(SY.last).toLocaleString('uk-UA'):'ще не було'}</b>${SY.err?`<br><span style="color:var(--red)">Помилка: ${esc(SY.err)}</span>`:''}</p>
+    <div class="row" style="flex-direction:column;gap:8px"><button class="btn" id="syQR" style="width:100%">📱 Підключити телефон (QR-код)</button><button class="btn g" id="syNow" style="width:100%">🔄 Синхронізувати зараз</button><button class="btn g sm" id="syOff" style="width:100%">Вимкнути на цьому пристрої</button></div>`
+  :`<div style="font-size:44px">🔄</div><h2>Синхронізація ПК і телефона</h2>
+    <div class="card small" style="text-align:left"><b>Один раз на ПК:</b>
+      <ol style="margin:6px 0 0;padding-left:18px;line-height:1.6"><li>Натисни <a href="https://github.com/settings/tokens/new?scopes=gist&description=%D0%A8%D0%B0%D1%85%D0%BE%D0%B2%D0%B8%D0%B9%20%D1%82%D1%80%D0%B5%D0%BD%D0%B5%D1%80" target="_blank" style="color:var(--green)">цю кнопку-посилання</a> (відкриється GitHub).</li>
+      <li>Там уже відмічено лише <b>gist</b>. У «Expiration» вибери <b>No expiration</b>.</li><li>Натисни зелену <b>Generate token</b> і скопіюй ключ (починається з <code>ghp_</code>).</li><li>Встав його нижче й натисни «Підключити».</li></ol></div>
+    <input id="syTok" type="password" placeholder="встав ключ ghp_…" autocomplete="off" style="width:100%;padding:10px;border-radius:8px;border:2px solid #3c3a37;background:#1f1e1b;color:#fff;margin:8px 0">
+    <button class="btn" id="syGo" style="width:100%">Підключити</button>
+    <p class="small mut" style="margin-top:8px">Прогрес зберігається в <b>приватному</b> файлі у твоєму GitHub. Ключ має доступ тільки до таких файлів (gist) і лишається лише на твоїх пристроях. Потім телефон підключиш QR-кодом, без ключа.</p>`);
+  if($('#syQR'))$('#syQR').onclick=showQR;
+  if($('#syNow'))$('#syNow').onclick=()=>{closeModal();syncNow(true)};
+  if($('#syOff'))$('#syOff').onclick=()=>{if(confirm('Вимкнути синхронізацію на цьому пристрої? Прогрес лишиться тут і в GitHub.')){SY={};saveSY();closeModal();updMe();toast('Синхронізацію вимкнено')}};
+  if($('#syGo'))$('#syGo').onclick=async()=>{const t=$('#syTok').value;if(!t.trim())return;$('#syGo').disabled=true;$('#syGo').textContent='Підключаю…';
+    try{await syncConnect(t);closeModal();updMe();toast('✅ Синхронізацію увімкнено! Тепер підключи телефон QR-кодом.',5000);setTimeout(syncPanel,600)}catch(e){$('#syGo').disabled=false;$('#syGo').textContent='Підключити';toast('❌ '+esc(e.message||e),6000)}};
+}
+/* phone side: opened from the QR code */
+(async()=>{
+  const m=location.hash.match(/^#pair=(.+)$/);if(!m)return;
+  history.replaceState(null,'',location.pathname+location.search);
+  try{const d=JSON.parse(decodeURIComponent(escape(atob(m[1]))));SY={token:d.t,gist:d.g};saveSY();
+    const u=await gh('/user');if(u.ok)SY.login=(await u.json()).login;saveSY();
+    await syncNow();if(S.elo&&document.querySelector('#eloIn'))closeModal();
+    showView('home');toast('✅ Пристрій підключено! Прогрес синхронізовано.',5000);
+  }catch(e){toast('❌ Не вдалося підключити: '+esc(e.message||e),6000)}
+})();
+if(SY.token&&SY.gist){setTimeout(()=>syncNow(),1500);setInterval(()=>syncNow(),120000);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncNow();else if(syncT){clearTimeout(syncT);syncNow()}})}
+
+/* ================= ✏️ code-drawn icons for the Path (inline SVG, no emoji) ================= */
+const IC={
+ eye:'<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+ gift:'<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M5 12v9h14v-9"/><path d="M12 8C10 4 6 4 6 6.5S9 8 12 8zM12 8c2-4 6-4 6-1.5S15 8 12 8z"/>',
+ alert:'<path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17.5v.01"/>',
+ target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+ fork:'<path d="M6 3v5a4 4 0 0 0 8 0V3M10 3v5M10 12v9"/>',
+ pin:'<path d="M12 16v6M9 3h6l-1 6 3 3H7l3-3-1-6z"/>',
+ bolt:'<path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/>',
+ bolt2:'<path d="M10 2 3 12h5l-1 7 7-10H9l1-7zM18 6l-3 5h3l-1 5 4-6h-3l1-4z"/>',
+ wall:'<rect x="3" y="5" width="18" height="14" rx="1"/><path d="M3 12h18M9 5v7M15 12v7"/>',
+ sword:'<path d="M14.5 17.5 3 6V3h3l11.5 11.5M13 19l6-6M16 16l4 4M19 21l2-2"/>',
+ reveal:'<path d="M4 12h10M10 6l6 6-6 6M20 4v16"/>',
+ burst:'<path d="M12 2l2 6 6-3-3 6 5 2-6 2 2 6-6-3-3 5-1-6-6 1 4-5-4-4 6 0z"/>',
+ cage:'<rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9.5 4v16M14.5 4v16M5 12h14"/>',
+ magnet:'<path d="M6 3v8a6 6 0 0 0 12 0V3h-4v8a2 2 0 0 1-4 0V3H6zM6 7h4M14 7h4"/>',
+ rocket:'<path d="M12 2c4 3 5 8 3 13H9C7 10 8 5 12 2z"/><circle cx="12" cy="9" r="1.5"/><path d="M9 15l-3 3v3l4-2M15 15l3 3v3l-4-2"/>',
+ dice:'<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="15" r="1"/><circle cx="15" cy="9" r="1"/><circle cx="9" cy="15" r="1"/><circle cx="12" cy="12" r="1"/>',
+ shield:'<path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/>',
+ flame:'<path d="M12 2c1 4 6 6 6 12a6 6 0 0 1-12 0c0-3 2-5 3-7 0 2 1 3 2 3 0-3 0-6 1-8z"/>',
+ book:'<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5z"/><path d="M4 19a2 2 0 0 1 2-2h13M9 7h6"/>',
+ trap:'<path d="M3 19h18M5 19l2-7 3 4 2-6 2 6 3-4 2 7"/>',
+ king:'<path d="M12 2v4M10 4h4M8 8h8l-1 4H9L8 8zM8 12h8l1 7H7l1-7zM6 21h12"/>',
+ rook:'<path d="M6 21h12M7 18h10l-1-7H8l-1 7zM6 4h3v2h2V4h2v2h2V4h3v4l-2 3H8L6 8z"/>',
+ rooks:'<path d="M3 20h8M4 17h6l-.6-5H4.6L4 17zM3 6h2v1.5h1V6h1v1.5h1V6h2v3l-1 2H4L3 9zM13 20h8M14 17h6l-.6-5h-4.8L14 17zM13 6h2v1.5h1V6h1v1.5h1V6h2v3l-1 2h-5l-1-2z"/>',
+ pawn:'<circle cx="12" cy="6.5" r="3"/><path d="M9.5 10h5L16 17H8l1.5-7zM6 21h12M8 17h8l1 4H7l1-4z"/>',
+ queen:'<circle cx="4" cy="6" r="1.5"/><circle cx="12" cy="4" r="1.5"/><circle cx="20" cy="6" r="1.5"/><path d="M5 8l2 9h10l2-9-4 4-3-6-3 6-4-4zM6 21h12M7 17h10"/>',
+ flag:'<path d="M5 21V4M5 4h12l-2.5 4L17 12H5"/>',
+ files:'<path d="M6 3v18M12 3v18M18 3v18"/>',
+ island:'<path d="M3 17c3-2 5-2 9 0s6 2 9 0"/><circle cx="12" cy="11" r="3.5"/>',
+ runner:'<path d="M4 12h13M12 5l7 7-7 7"/><path d="M4 6h5M4 18h5"/>',
+ bishop:'<path d="M12 3a3 3 0 0 1 3 3c0 2.2-1.8 3.6-3 6-1.2-2.4-3-3.8-3-6a3 3 0 0 1 3-3zM12 5.5l1.2 1.4M9 13h6l1 5H8l1-5zM6 21h12"/>',
+ compass:'<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5 13 13l-4.5 2.5L11 11l4.5-2.5z"/>',
+ calc:'<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 12h.01M12 12h.01M16 12h.01M8 16h.01M12 16h.01M16 16h.01"/>',
+ skull:'<path d="M12 3a8 8 0 0 0-5 14.2V20h10v-2.8A8 8 0 0 0 12 3z"/><circle cx="9" cy="11" r="1.6"/><circle cx="15" cy="11" r="1.6"/><path d="M10 20v-2M14 20v-2"/>',
+ dragon:'<path d="M4 18c2-6 6-9 11-9l5-4-1 6 2 3-4 1c-1 3-4 5-8 5H4z"/><circle cx="15" cy="11" r=".8"/><path d="M7 18l-1 3M11 18l1 3"/>',
+ lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4M12 15v2"/>',
+ bridge:'<path d="M3 17h18M3 9h18M5 9v8M19 9v8M9 9v8M15 9v8"/>',
+ square:'<rect x="5" y="5" width="14" height="14" rx="1"/><path d="M5 19 19 5"/>',
+ check:'<path d="M4 12l5 5L20 6"/>',
+};
+const ic=(k,sz=34)=>`<svg viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[k]||IC.dice}</svg>`;
+function iconKey(l){
+  if(l.t==='boss')return l.id==='c7boss'||l.id==='c6boss'?'dragon':'skull';
+  if(l.t==='vision')return l.task==='win'?'gift':l.task==='danger'?'alert':'eye';
+  if(l.t==='calc')return 'calc';
+  if(l.t==='strategy')return {outpost:'flag',openfile:'files',isolated:'island',passed:'runner',badbishop:'bishop',worst:'compass'}[l.topic]||'compass';
+  if(l.t==='endgame')return {kq:'queen',rr:'rooks',kr:'rook',kp:'pawn',bk:'sword',opp:'king',key:'king',square:'square',lucena:'bridge',philidor:'shield',qvp:'queen'}[l.eg]||'king';
+  if(l.t==='opening')return ['legal','englund'].includes(l.op)?'trap':l.op==='greek'?'gift':l.op==='scholar'?'shield':'book';
+  if(l.t==='puzzle')return {hangingPiece:'target',mateIn1:'bolt',mateIn2:'bolt2',backRankMate:'wall',fork:'fork',pin:'pin',skewer:'sword',discoveredAttack:'reveal',capturingDefender:'burst',trappedPiece:'cage',deflection:'magnet',opening:'rocket',mix:'dice',defensiveMove:'shield',kingsideAttack:'flame'}[l.theme]||'dice';
+  return 'dice';
+}
+
 /* ================= VIEWS ================= */
 function setNav(v){document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===v))}
 function showMain(){$('#home').style.display='none';$('#main').style.display='flex'}
@@ -2844,7 +3019,7 @@ function viewHome(){
       const st=S.lessons[l.id]||{stars:0};const done=st.done,un=unlocked(l.id),cur=l.id===curId;
       const off=Math.round([0,60,90,60,0,-60,-90,-60][i%8]*(innerWidth<600?0.4:1));
       const req=REQ(l);
-      path+=`<div style="position:relative;transform:translateX(${off}px)"><button class="node ${done?'done':un?'':'lock'} ${cur?'cur':''}" data-l="${l.id}" style="background:${u.col};box-shadow:0 7px 0 ${u.sh}">${cur?'<span class="startTip">ПОЧАТИ</span>':''}${un||done?l.i:'🔒'}
+      path+=`<div style="position:relative;transform:translateX(${off}px)"><button class="node ${done?'done':un?'':'lock'} ${cur?'cur':''}" data-l="${l.id}" style="background:${u.col};box-shadow:0 7px 0 ${u.sh}">${cur?'<span class="startTip">ПОЧАТИ</span>':''}${ic(un||done?iconKey(l):'lock',un||done?34:28)}
         <span class="lbl" style="${off>0?'right:96px;text-align:right':'left:96px'}">${esc(l.title)}<small>${'★'.repeat(done?req:st.stars||0)}${'☆'.repeat(Math.max(0,req-(done?req:st.stars||0)))}</small></span></button></div>`;
     });
     path+='</div></div>';
@@ -2863,7 +3038,7 @@ function viewHome(){
     </div>
     ${!S.test||!testDueIn()?`<div class="card" style="border:2px solid var(--gold)"><h4>📏 Контрольний тест</h4><div class="small mut">${!S.test?'Пройди перший тест, щоб зафіксувати свій рівень. Через місяць побачиш прогрес.':'Минув місяць: час перевірити, наскільки ти виріс!'}</div><button class="btn" style="margin-top:10px;width:100%" onclick="showView('test')">Перейти до тесту</button></div>`:''}
     ${due.length?`<div class="card" style="border:2px solid var(--red)"><h4>🔁 Повторення: ${due.length}</h4><div class="small mut">Ці уроки час повторити, поки ти їх не забув (крива забування Еббінгауза). Повторення займає 1–3 хвилини.</div><button class="btn" style="margin-top:10px;width:100%" id="goRev">Повторити</button></div>`:''}
-    ${curId?`<div class="card"><h4>▶ Продовжити</h4><div class="small">${LESSONS[curId].i} ${esc(LESSONS[curId].title)}</div><button class="btn" style="margin-top:10px;width:100%" id="goCur">Почати</button></div>`:'<div class="card"><h4>🏆 Шлях пройдено!</h4><div class="small mut">Тепер повторюй і грай з ботами вищих рівнів.</div></div>'}
+    ${curId?`<div class="card"><h4>▶ Продовжити</h4><div class="small row" style="gap:6px">${ic(iconKey(LESSONS[curId]),18)} ${esc(LESSONS[curId].title)}</div><button class="btn" style="margin-top:10px;width:100%" id="goCur">Почати</button></div>`:'<div class="card"><h4>🏆 Шлях пройдено!</h4><div class="small mut">Тепер повторюй і грай з ботами вищих рівнів.</div></div>'}
     ${weak?`<div class="card"><h4>🎯 Твоя слабка тема</h4><div class="small">${THEMES[weak[0]].i} ${THEMES[weak[0]].n}: ${Math.round(weak[1].ok/weak[1].n*100)}% правильно</div><button class="btn g" style="margin-top:10px;width:100%" id="goWeak">Тренувати</button></div>`:''}
     <div class="card small"><h4>🧠 Як працює навчання</h4>
       <div style="margin-bottom:5px">⭐ <b>3 ідеальних рази поспіль</b>: тільки тоді відкриється наступний урок. Одна помилка, і серія з нуля.</div>
@@ -3004,6 +3179,9 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '1.1.0':['🔄 Синхронізація прогресу між ПК і телефоном: один раз підключаєш на ПК, а телефон — скануванням QR-коду',
+           '🔒 QR-код захищений: розмитий, поки не натиснеш на нього 3 рази',
+           '✏️ На Шляху нові намальовані іконки уроків замість емодзі'],
   '1.0.1':['📱 На телефоні кнопка «Почати заняття» тепер угорі, а назви уроків на Шляху не обрізаються'],
   '1.0.0':['📱 Мобільна версія: дошка на весь екран, меню внизу, налаштування під ⚙',
            '🌐 Повний Stockfish у браузері (сильніший) і смуга завантаження',
