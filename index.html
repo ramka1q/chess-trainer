@@ -58,7 +58,7 @@ button{font-family:inherit}
 .sq{position:relative;display:flex;align-items:center;justify-content:center}
 .sq.l{background:var(--light)} .sq.d{background:var(--dark)}
 .sq.l.hl{background:var(--hl-l)} .sq.d.hl{background:var(--hl-d)}
-.sq .qm{position:absolute;top:3%;right:3%;width:34%;height:34%;border-radius:50%;z-index:6;display:flex;align-items:center;justify-content:center;font-weight:900;color:#fff;font-size:calc(var(--bs)/34);cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.45),0 0 0 2px #fff;animation:qmPulse 1.6s ease-in-out infinite}
+.sq .qm{position:absolute;top:1%;left:32%;width:36%;height:36%;border-radius:50%;z-index:6;display:flex;align-items:center;justify-content:center;font-weight:900;color:#fff;font-size:calc(var(--bs)/34);cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.45),0 0 0 2px #fff;animation:qmPulse 1.6s ease-in-out infinite}
 .sq .qm.good{background:#81B64C} .sq .qm.miss{background:#e0a800} .sq .qm.bad{background:#FA412D}
 @keyframes qmPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
 .sq img.pc{width:100%;height:100%;position:relative;z-index:3;pointer-events:none;will-change:transform}
@@ -252,7 +252,7 @@ button{font-family:inherit}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="pieces.js"></script>
 <script src="masters.js"></script>
-<script src="storm.js?v=1.6.3" defer></script>
+<script src="storm.js?v=1.6.4" defer></script>
 <script>
 "use strict";
 /* ================= UTIL ================= */
@@ -715,7 +715,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='1.6.3';
+const APP_VERSION='1.6.4';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -1249,7 +1249,6 @@ function VisionRun(opt){ /* opt:{task:'win'|'danger'|'mixed', n, onEnd, lesson, 
       box.insertAdjacentHTML('beforeend',`<div class="small" style="margin-top:8px;color:#555">Натисни на <b>?</b> на дошці, щоб побачити, чому так.</div><div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px">${items.map((it,i)=>`<button class="chip" data-x="${i}" style="background:${it.kind==='good'?'#d7ecc4':it.kind==='miss'?'#f8e7a8':'#f6c9c2'};color:#222">▶ Показати ${it.sq}</button>`).join('')}</div>`);
       box.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>demo(items[+b.dataset.x],att))};
     addBtns();
-    const first=items.find(x=>x.kind!=='good');if(first){const tk=demoTok;setTimeout(()=>{if(me.alive&&checked&&tk===demoTok)demo(first,att)},900)}
   }
   function myCol(){return new Chess(fen).turn()}
   let demoTok=0;
@@ -3233,6 +3232,7 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '1.6.4':['❔ Знак «?» тепер стоїть зверху над фігурою, а пояснення програється тільки коли на нього натиснеш'],
   '1.6.3':['📱 Шахи-Буря швидше працює на телефонах: легша 3D-сцена, менше частинок, корона крутиться економніше, туман без важкого розмиття'],
   '1.6.2':['❔ У вправах «Бери безкоштовне» і «Що під ударом» після перевірки над фігурами зʼявляється знак «?». Натисни, і тренер покаже чому',
            '🤫 У меню зʼявилася таємнича вкладка «???». Що за нею, дізнаєшся, тільки коли зазирнеш'],
