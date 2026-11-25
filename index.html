@@ -271,8 +271,8 @@ body.wood .sq.d.hl{background-image:linear-gradient(rgba(170,190,40,.5),rgba(170
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="pieces.js"></script>
 <script src="masters.js"></script>
-<script src="storm.js?v=2.1.0" defer></script>
-<script src="icons.js?v=2.1.0" defer></script>
+<script src="storm.js?v=2.1.1" defer></script>
+<script src="icons.js?v=2.1.1" defer></script>
 <script>
 "use strict";
 /* ================= UTIL ================= */
@@ -394,7 +394,10 @@ function exchangeLine(fen,sq,att,from){
   const victimC=other(att);const defs=attackersOf(init,sq,victimC).filter(a=>a.sq!==sq);
   const pinned=defs.length&&!after.moves({verbose:true}).some(x=>x.to===sq)?defs[0].sq:null;
   const refuse=stopAt<steps.length?steps[stopAt].v-sNext[stopAt+1]:null;
-  return{steps,bal,pinned,stopAt,refuse};
+  /* at the end of the exchange: pieces that seem to hit the square but are pinned to their king */
+  const endFen=t.fen(),endSide=t.turn();
+  const blocked=attackersOf(t,sq,endSide).filter(a=>a.sq!==sq&&a.type!=='k'&&a.sq!==pinned).map(a=>({...a,pin:pinInfo(endFen,a.sq)})).filter(a=>a.pin);
+  return{steps,bal,pinned,stopAt,refuse,blocked};
 }
 function pinInfo(fen,sq){
   const g=new Chess(fen);const p=g.get(sq);if(!p)return null;
@@ -854,7 +857,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='2.1.0';
+const APP_VERSION='2.1.1';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -1422,6 +1425,13 @@ function VisionRun(opt){ /* opt:{task:'win'|'danger'|'mixed', n, onEnd, lesson, 
       say('');
     }
     if(L.stopAt<L.steps.length){const st=L.steps[L.stopAt];const you=st.color===meSide;lines.push(`<div style="margin-top:6px">Бачиш: ${you?'тобі':'супернику'} забирати назад ${L.refuse<0?`невигідно — ${you?'ти втратиш':'він втратить'} ще більше`:`нічого не дає — ${you?'суперник':'ти'} все одно забира${you?'є':'єш'} ще раз`}. Тому розумно просто не брати, а результат той самий.</div>`)}
+    /* a piece that looks like it can take back, but is pinned (e.g. a queen pinned to its king) */
+    if(L.blocked&&L.blocked.length){
+      for(const b of L.blocked){const P=b.pin;const cap=s=>s[0].toUpperCase()+s.slice(1);
+        lines.push(`<div style="margin-top:6px">🔗 ${cap(NAME[b.type])} на <b>${b.sq}</b> теж бʼє ${it.sq} (жовта стрілка), але він <b>звʼязаний</b>: ${NAME[P.type]} на ${P.from} стоїть з ним на одній лінії з королем на ${P.king} (червона стрілка). Якщо він піде, ${NAME[P.type]} забере короля, а так ходити не можна. Тому забрати не може.</div>`);
+        board.arrows=[...board.arrows,{from:b.sq,to:it.sq,c:'y'},{from:P.from,to:P.king,c:'r'}];board.marks={...board.marks,[b.sq]:'bad'}}
+      board.render();say('');
+    }
     if(my!==demoTok)return;
     const attWho=att===meSide?'ти':'суперник';
     let fin;
@@ -3399,6 +3409,7 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '2.1.1':['🔗 У поясненні розмінів тренер тепер показує звʼязані фігури: наприклад, ферзь «бʼє» клітинку, але забрати не може, бо звʼязаний з королем'],
   '2.1.0':['💻 Сайт може думати Stockfish 19 з ПК-версії, один в один як через .cmd: запусти «Запустити шахи.cmd» і увімкни в Налаштуваннях «Рахувати через ПК-версію»'],
   '2.0.1':['💻 На компʼютері одразу працює повний Stockfish 19, без перевірок і без вікна з перезавантаженням'],
   '2.0.0':['🧠 Stockfish оновлено з 17.1 до 19: найновіша версія для браузера. Легка тепер важить лише 2 МБ, повна ~100 МБ. Старі файли 17.1 видаляються з пристрою самі'],
