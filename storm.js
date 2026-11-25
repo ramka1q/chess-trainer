@@ -1189,6 +1189,7 @@ window.viewStorm=function(){
   css();loadThree().catch(()=>{});
   board.clear();board.flip=false;board.set(new Chess());board.canMove=()=>false;
   S.storm=S.storm||{games:0,seen:{}};
+  if(!S.storm.found){S.storm.found=true;save();window.updSecret&&updSecret();toast('🌪 Ти знайшов секретний режим: Шахи-Буря!',3200)}
   let mode=S.stormMode||'bot',lvl=S.playLevel??1,col='w',freq=S.stormFreq||'normal',autoFlip=!!S.stormFlip,showQ=S.stormQ!==false;
   players(plHtml(mode==='bot'?'Бот':'Друг','','b'),plHtml('Ти','','w'));
   function ui(){
