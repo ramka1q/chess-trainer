@@ -271,7 +271,8 @@ body.wood .sq.d.hl{background-image:linear-gradient(rgba(170,190,40,.5),rgba(170
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="pieces.js"></script>
 <script src="masters.js"></script>
-<script src="storm.js?v=1.7.1" defer></script>
+<script src="storm.js?v=1.8.0" defer></script>
+<script src="icons.js?v=1.8.0" defer></script>
 <script>
 "use strict";
 /* ================= UTIL ================= */
@@ -771,7 +772,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='1.7.1';
+const APP_VERSION='1.8.0';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -3304,6 +3305,7 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '1.8.0':['🎨 Усі емодзі на сайті замінено на власні іконки, намальовані кодом: однаково гарно виглядають на будь-якому телефоні й компʼютері'],
   '1.7.1':['⚙️ Нова сторінка «Налаштування»: вибір дошки, увімкнути чи вимкнути Шахи-Бурю, звук'],
   '1.7.0':['🪵 Нова деревʼяна дошка! При першому вході можна вибрати зелену або деревʼяну, а потім змінити в налаштуваннях (🎨 Дошка)'],
   '1.6.4':['❔ Знак «?» тепер стоїть зверху над фігурою, а пояснення програється тільки коли на нього натиснеш'],

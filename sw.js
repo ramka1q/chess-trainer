@@ -1,8 +1,8 @@
 /* Service worker: makes the trainer installable and keeps the big engine files
    (Stockfish WASM, chess.js) in a cache, so they are downloaded only once. */
-const APP = 'trainer-app-v4';
+const APP = 'trainer-app-v5';
 const LIBS = 'trainer-libs-v1';
-const SHELL = ['./', 'index.html', 'pieces.js', 'masters.js', 'storm.js', 'manifest.json', 'icon.svg'];
+const SHELL = ['./', 'index.html', 'pieces.js', 'masters.js', 'storm.js', 'icons.js', 'manifest.json', 'icon.svg'];
 
 async function isolate(r) {
   r = await r;
