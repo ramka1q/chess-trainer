@@ -700,7 +700,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='1.3.0';
+const APP_VERSION='1.4.0';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -3210,6 +3210,9 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '1.4.0':['🌐 Шахи-Буря по мережі: створи запрошення, надішли посилання другу, і грайте кожен на своєму пристрої',
+           '💥 Епічні анімації взяття ферзя: чим слабша фігура, тим крутіше. Пішак, що бере ферзя, отримує корону!',
+           '♟ У 3D-сценах фігури тепер виглядають як звичайні 2D-іконки, без підставок'],
   '1.3.0':['🌪 Новий режим «Шахи-Буря»: грай з ботом або з другом, а раз на кілька ходів змінюється погода',
            '🎬 Під час події дошка оживає в 3D: фігури встають, камера дивиться у вікно, а там торнадо, блискавка, НЛО, метеорит…',
            '📻 Перед кожною партією прогноз погоди, а за хід до події з’являється прикмета'],

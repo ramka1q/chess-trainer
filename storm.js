@@ -54,7 +54,7 @@ const EVENTS={
           if(p.type==='p'&&(to[1]==='1'||to[1]==='8')){ch.push({t:'kill',sq:s,p,how:'fly'});return}
           m[to]=p;ch.push({t:'move',from:s,to,p})});
         const fen=valid(m,X.turn,X.fen);
-        if(fen&&ch.length){const k=ch.filter(c=>c.t==='kill').length;return{fen,ch,note:`Торнадо прокрутив край дошки ${dir>0?'за':'проти'} годинниковою стрілкою${k?`, здуло пішаків: ${k}`:''}.`}}
+        if(fen&&ch.length){const k=ch.filter(c=>c.t==='kill').length;return{fen,ch,note:`Торнадо прокрутив край дошки ${dir>0?'за годинниковою стрілкою':'проти годинникової стрілки'}${k?`, здуло пішаків: ${k}`:''}.`}}
       }
       return null}},
   lightning:{i:'⚡',n:'Блискавка',rar:'c',omen:'⚡ Десь далеко гримить…',
@@ -249,11 +249,15 @@ async function init3D(){
   W3.bcv=document.createElement('canvas');W3.bcv.width=W3.bcv.height=1024;W3.btex=makeTex(W3.bcv);
   W3.top=new T.Mesh(new T.PlaneGeometry(8,8),new T.MeshBasicMaterial({map:W3.btex}));W3.top.rotation.x=-Math.PI/2;W3.top.position.y=.001;scene.add(W3.top);
   W3.ptex={};await Promise.all(['w','b'].flatMap(c=>['p','n','b','r','q','k'].map(t=>new Promise(res=>{const im=new Image();im.onload=()=>{const c2=document.createElement('canvas');c2.width=c2.height=256;c2.getContext('2d').drawImage(im,0,0,256,256);W3.ptex[c+t]=makeTex(c2);res()};im.onerror=res;im.src=PIC(c,t)}))));
-  W3.pgeo=new T.PlaneGeometry(1,1);W3.bgeo=new T.CylinderGeometry(.36,.4,.07,24);
+  W3.pgeo=new T.PlaneGeometry(1,1);
   /* main loop */
   let last=performance.now();
-  const loop=now=>{requestAnimationFrame(loop);if(!W3.on)return;const dt=Math.min(.05,(now-last)/1000)*W3.speed;last=now;for(const u of [...W3.upd])u(now,dt);frame(dt);R.render(scene,cam)};
+  let lastStep=0;
+  const step=(now,maxDt)=>{lastStep=performance.now();if(!W3.on){last=now;return}const dt=Math.min(maxDt,(now-last)/1000)*W3.speed;last=now;for(const u of [...W3.upd])u(now,dt);frame(dt);R.render(scene,cam)};
+  const loop=now=>{requestAnimationFrame(loop);step(now,.05)};
   requestAnimationFrame(loop);
+  /* background tab: browsers pause requestAnimationFrame, so a timer finishes the cutscene (fast) */
+  setInterval(()=>{if(W3.on&&performance.now()-lastStep>250){const n=performance.now();step(n,document.hidden?1:.25)}},100);
   W3.ready=true;return W3;
 }
 function frostTex(){const c=document.createElement('canvas');c.width=c.height=512;const x=c.getContext('2d');
@@ -285,17 +289,15 @@ function drawBoard(info){
   W3.btex.needsUpdate=true;
 }
 
-/* cardboard piece: lies flat (looks exactly like the 2D picture from above) and stands up when s→1 */
+/* a piece is just its 2D picture: lies flat (identical to the 2D board from above) and stands up when s→1 */
 function makePiece(sq,p){
   const T=W3.T;const grp=new T.Group();grp.rotation.order='YXZ';
   const mat=new T.MeshBasicMaterial({map:W3.ptex[p.color+p.type],transparent:true,alphaTest:.02,side:T.DoubleSide});
   const pl=new T.Mesh(W3.pgeo,mat);grp.add(pl);
-  const bm=new T.MeshLambertMaterial({color:p.color==='w'?0xf3efe2:0x2a2622,transparent:true});const base=new T.Mesh(W3.bgeo,bm);
-  W3.scene.add(grp);W3.scene.add(base);
-  const o={sq,p,grp,pl,mat,base,bm,x:0,z:0,lift:0,spin:0,fall:0,alpha:1,tint:1,own:false,scale:1};const w=sqW(sq);o.x=w.x;o.z=w.z;return o;
+  W3.scene.add(grp);
+  const o={sq,p,grp,pl,mat,x:0,z:0,lift:0,spin:0,fall:0,alpha:1,tint:1,own:false,scale:1};const w=sqW(sq);o.x=w.x;o.z=w.z;return o;
 }
-function setPieceTex(o,p){o.p=p;o.mat.map=W3.ptex[p.color+p.type];o.mat.needsUpdate=true;o.bm.color.setHex(p.color==='w'?0xf3efe2:0x2a2622)}
-function disposePiece(o){W3.scene.remove(o.grp);W3.scene.remove(o.base);o.mat.dispose();o.bm.dispose()}
+function disposePiece(o){W3.scene.remove(o.grp);o.mat.dispose()}
 
 /* per-frame: camera, pieces, weather */
 function frame(dt){
@@ -326,7 +328,6 @@ function updPiece(o,lv){
   o.grp.scale.setScalar(o.scale);
   o.pl.position.y=(.5-.1*s);
   o.mat.color.setScalar(Math.min(1.6,lv*o.tint));o.mat.opacity=o.alpha;
-  o.base.position.set(o.x,.035+o.lift,o.z);o.base.scale.set(o.scale*s,s+.0001,o.scale*s);o.base.visible=s>.02&&o.alpha>.02;o.bm.opacity=o.alpha;o.base.rotation.y=o.spin;
 }
 
 /* camera shots */
@@ -402,6 +403,109 @@ function makeUfo(){const T=W3.T;const g=new T.Group();
 function beamTo(from,to,col=0x8ff6d0){const T=W3.T;const len=from.distanceTo(to);const geo=new T.CylinderGeometry(.35,1.1,len,20,1,true);geo.translate(0,-len/2,0);
   const m=new T.Mesh(geo,new T.MeshBasicMaterial({color:col,transparent:true,opacity:0,side:T.DoubleSide,depthWrite:false,blending:T.AdditiveBlending}));m.position.copy(from);
   const dir=new T.Vector3().subVectors(to,from).normalize();m.quaternion.setFromUnitVectors(new T.Vector3(0,-1,0),dir);W3.scene.add(m);return m}
+
+/* ================= QUEEN CAPTURE: the weaker the capturer, the more epic ================= */
+const QTIER={k:1,q:1,r:2,n:3,b:3,p:4};
+const QCAP={
+  k:{i:'👑',n:'Король розібрався з ферзем'},
+  q:{i:'♛',n:'Ферзь проти ферзя'},
+  r:{i:'🏰',n:'Тура трощить ферзя'},
+  n:{i:'🐴',n:'Кінь збиває ферзя!'},
+  b:{i:'⛪',n:'Слон збиває ферзя!'},
+  p:{i:'♟',n:'ПІШАК ЗБИВ ФЕРЗЯ!!!'},
+};
+function qcapCaption(p){const t=QTIER[p];return{i:QCAP[p].i,n:QCAP[p].n,d:'Епічність: '+'★'.repeat(t)+'☆'.repeat(4-t)+(t===4?'  ·  ЛЕГЕНДАРНО':'')}}
+function shotAt(w,a,dist,h,ty=.45){const V=(x,y,z)=>new W3.T.Vector3(x,y,z);return{p:V(w.x+Math.sin(a)*dist,h,w.z+Math.cos(a)*dist),t:V(w.x,ty,w.z),u:V(0,1,0),k:0}}
+/* the queen's own picture is cut into a 5×5 grid and the pieces fly apart */
+function shatter(o,power){
+  const T=W3.T,N=5,frags=[],tex=o.mat.map;
+  for(let i=0;i<N;i++)for(let j=0;j<N;j++){
+    const geo=new T.PlaneGeometry(1/N,1/N);const uv=geo.attributes.uv;
+    for(let k=0;k<uv.count;k++)uv.setXY(k,(i+uv.getX(k))/N,(j+uv.getY(k))/N);
+    const m=new T.Mesh(geo,new T.MeshBasicMaterial({map:tex,transparent:true,alphaTest:.05,side:T.DoubleSide}));
+    m.position.set(o.x+(i+.5)/N-.5,(j+.5)/N-.1+o.lift,o.z);W3.scene.add(m);
+    const v=new T.Vector3((i+.5)/N-.5,(j+.5)/N-.25,Math.random()-.35).normalize().multiplyScalar(power*(2+Math.random()*3));v.y+=power*2.2;
+    frags.push({m,v,r:new T.Vector3(Math.random()*12,Math.random()*12,Math.random()*12)});
+  }
+  const stop=every((n,dt)=>{for(const f of frags){f.v.y-=9.8*dt;f.m.position.addScaledVector(f.v,dt);f.m.rotation.x+=f.r.x*dt;f.m.rotation.y+=f.r.y*dt;f.m.rotation.z+=f.r.z*dt;
+    if(f.m.position.y<.03&&Math.abs(f.m.position.x)<4.5&&Math.abs(f.m.position.z)<4.5){f.m.position.y=.03;f.v.multiplyScalar(.45);f.v.y=Math.abs(f.v.y)*.3;f.r.multiplyScalar(.5)}}});
+  W3.cleanup.push(()=>{stop();frags.forEach(f=>{W3.scene.remove(f.m);f.m.geometry.dispose();f.m.material.dispose()})});
+  W3.onReturn.push(e=>frags.forEach(f=>f.m.material.opacity=1-e));
+}
+function shockwave(w,size,col=0xfff1c0){const T=W3.T;const m=new T.Mesh(new T.RingGeometry(.3,.55,64),new T.MeshBasicMaterial({color:col,transparent:true,opacity:.9,side:T.DoubleSide,depthWrite:false,blending:T.AdditiveBlending}));m.rotation.x=-Math.PI/2;m.position.set(w.x,.06,w.z);W3.scene.add(m);W3.cleanup.push(()=>W3.scene.remove(m));
+  return tween(900,e=>{m.scale.setScalar(1+e*size);m.material.opacity=.9*(1-e)},easeO)}
+function burst(w,n,col,speed,size=.25,y=.4){const T=W3.T;const P=particles(n,col,size,1);P.material.blending=T.AdditiveBlending;const a=P.geometry.attributes.position.array;const v=[];
+  for(let i=0;i<n;i++){a[i*3]=w.x;a[i*3+1]=y;a[i*3+2]=w.z;const d=new T.Vector3(Math.random()-.5,Math.random()*.9+.2,Math.random()-.5).normalize().multiplyScalar(speed*(.4+Math.random()));v.push(d)}
+  const stop=every((nw,dt)=>{for(let i=0;i<n;i++){v[i].y-=6*dt;a[i*3]+=v[i].x*dt;a[i*3+1]=Math.max(.04,a[i*3+1]+v[i].y*dt);a[i*3+2]+=v[i].z*dt}P.geometry.attributes.position.needsUpdate=true;P.material.opacity=Math.max(0,P.material.opacity-dt*.35)});
+  W3.cleanup.push(()=>{stop();W3.scene.remove(P)});}
+function makeCrown(){const T=W3.T;const g=new T.Group();const m=new T.MeshBasicMaterial({color:0xffd54a});
+  const band=new T.Mesh(new T.CylinderGeometry(.3,.3,.14,20,1,true),new T.MeshBasicMaterial({color:0xffc928,side:T.DoubleSide}));g.add(band);
+  for(let i=0;i<6;i++){const a=i/6*Math.PI*2;const c=new T.Mesh(new T.ConeGeometry(.07,.22,6),m);c.position.set(Math.cos(a)*.3,.17,Math.sin(a)*.3);g.add(c);
+    const gem=new T.Mesh(new T.SphereGeometry(.045,8,6),new T.MeshBasicMaterial({color:[0xff3b5c,0x3bb2ff,0x3bff8a][i%3]}));gem.position.set(Math.cos(a)*.31,0,Math.sin(a)*.31);g.add(gem)}
+  W3.scene.add(g);W3.cleanup.push(()=>W3.scene.remove(g));return g}
+function heartbeat(n=3,gap=.75){for(let i=0;i<n;i++){tone(52,.22,{g:.5,delay:i*gap});tone(46,.25,{g:.45,delay:i*gap+.22})}}
+function fanfare(){[[392,0],[523,.18],[659,.36],[784,.54],[1047,.8]].forEach(([f,d])=>{tone(f,.9,{type:'triangle',g:.1,delay:d});tone(f/2,.9,{type:'sawtooth',g:.03,delay:d})})}
+
+async function qcapFX(X){
+  const c=X.qc,t=QTIER[c.p]||1;const o=W3.pcs[c.from],q=W3.pcs[c.to];if(!o||!q)return;
+  const wf=sqW(c.from),wt=sqW(c.to);
+  const back=Math.atan2(wf.x-wt.x,wf.z-wt.z);            /* direction from the queen towards the capturer */
+  o.own=true;o.s=1;q.own=true;q.s=1;
+  const slow=W3.speed<=1;
+  /* 1. dramatic intro */
+  if(t===4){
+    W3.lamp.userData.on=1;
+    await Promise.all([camTo(shotAt(wf,back+.35,3.2,1.5,.6),1200),tween(1100,e=>{W3.lvl=lerp(1,.32,e);W3.lamp.userData.on=1-e*.85})]);
+    const aura=new W3.T.Sprite(new W3.T.SpriteMaterial({map:blobTex('255,200,70'),transparent:true,depthWrite:false,blending:W3.T.AdditiveBlending,opacity:0}));aura.scale.set(3.2,3.2,1);W3.scene.add(aura);W3.cleanup.push(()=>W3.scene.remove(aura));
+    const crown=makeCrown();crown.scale.setScalar(.01);
+    const follow=every(n=>{aura.position.set(o.x,o.lift+.5,o.z);crown.position.set(o.x,o.lift+1.18+Math.sin(n/300)*.04,o.z);crown.rotation.y=n/700});W3.cleanup.push(follow);
+    heartbeat(4,.7);
+    burst(wf,160,0xffd54a,2.2,.18,.2);
+    await tween(1600,e=>{o.lift=e*1.1;o.tint=lerp(1,1.9,e);aura.material.opacity=e*.95;o.spin=Math.sin(e*Math.PI)*.4});
+    tone(110,3.2,{type:'sawtooth',g:.05});tone(165,3.2,{type:'sawtooth',g:.04});tone(220,3.2,{type:'triangle',g:.05});
+    await tween(700,e=>crown.scale.setScalar(Math.max(.01,e)),easeO);
+    /* full 360° orbit around the crowned pawn */
+    await tween(2600,e=>{const a=back+.35+e*Math.PI*2;const s=shotAt(wf,a,3.4-Math.sin(e*Math.PI)*.6,1.6+Math.sin(e*Math.PI)*.9,.9);W3.C.p.copy(s.p);W3.C.t.copy(s.t)},easeIO);
+    await camTo(shotAt(wt,back+.25,4.6,2.6,.6),900);
+    o.lift=1.1;
+  }else{
+    await camTo(shotAt(wt,back+.5,3.6+t*.5,1.5+t*.35,.5),1100);
+    if(t>=3){ /* half orbit around the doomed queen */
+      tone(82,2.2,{type:'sawtooth',g:.05});noise(2,{type:'bandpass',f:200,f2:900,g:.25,att:1.6});
+      const a0=back+.5;await tween(1800,e=>{const s=shotAt(wt,a0+e*Math.PI*.9,4.4,2,.5);W3.C.p.copy(s.p);W3.C.t.copy(s.t)},easeIO);
+      await camTo(shotAt(wt,back+.4,4.2,2.2,.6),600);
+    }
+  }
+  /* 2. the jump */
+  const H=[0,1.1,2.1,3.2,4.6][t];const x0=o.x,z0=o.z,l0=o.lift;
+  noise(.5+t*.15,{type:'bandpass',f:600,f2:2400,q:2,g:.25});
+  await tween(650+t*180,e=>{o.x=lerp(x0,wt.x,e);o.z=lerp(z0,wt.z,e);o.lift=lerp(l0,H,easeO(e));o.spin=(t>=2?e*Math.PI*2*(t-1):0)},easeIO);
+  /* 3. slow motion at the top */
+  if(t>=2&&slow){const sp=W3.speed;W3.speed=t===4?.18:.3;q.tint=1;
+    tone(t===4?60:90,1.2,{type:'sine',f2:40,g:.3});
+    await tween(t===4?260:200,e=>{o.lift=H+Math.sin(e*Math.PI)*.25;o.spin+=.01});W3.speed=sp}
+  /* 4. SLAM */
+  await tween(t===4?160:200,e=>{o.lift=H*(1-e)},k=>k*k);o.lift=0;o.spin=0;
+  q.alpha=0;shatter(q,.6+t*.45);
+  W3.flash=.25+.3*t;W3.shake=.06*t+.04;
+  if(t===1){noise(.5,{f:900,g:.5});tone(300,.3,{type:'triangle',g:.1})}else SFX.boom();
+  if(t>=2){shockwave(wt,4+t*2.5)}
+  if(t>=3){const V=(x,y,z)=>new W3.T.Vector3(x,y,z);zap(V(wt.x-1.5,14,wt.z-3),V(wt.x,.1,wt.z),.08);setTimeout(()=>zap(V(wt.x+2,14,wt.z-4),V(wt.x,.1,wt.z),.08),120);SFX.thunder()
+    /* every other piece on the board jumps from the hit */
+    const others=Object.values(W3.pcs).filter(x=>x!==o&&x!==q);others.forEach(x=>x.own=true);
+    tween(900,e=>others.forEach(x=>{const d=Math.hypot(x.x-wt.x,x.z-wt.z);const k=Math.max(0,1-d/9);x.lift=Math.sin(Math.min(1,e*1.6-d*.05)*Math.PI)*k*.35*t;x.spin=Math.sin(e*Math.PI*2)*.25*k}),k=>k).then(()=>others.forEach(x=>{x.lift=0;x.spin=0;x.own=false}));}
+  if(t===4){
+    setTimeout(()=>shockwave(wt,18,0xffd54a),180);setTimeout(()=>shockwave(wt,26,0xff8a3b),360);
+    burst(wt,700,0xffd54a,9,.22);burst(wt,300,0xff5a5a,7,.2);
+    W3.skyTint.setRGB(2.2,1.8,1);W3.flash=1.6;setTimeout(fanfare,500);
+  }
+  await tween(700+t*150,e=>{W3.shake=(.06*t+.04)*(1-e)});
+  /* 5. hero pose */
+  W3.pcs[c.to]=o;delete W3.pcs[c.from];o.sq=c.to;disposePiece(q);
+  if(t===4){await camTo(shotAt(wt,back+.25,4,1.9,.9),1100);await wait(900);await tween(900,e=>{W3.lvl=lerp(.32,1,e);W3.lamp.userData.on=lerp(.15,1,e);o.tint=lerp(1.9,1,e);W3.skyTint.setRGB(lerp(2.2,1,e),lerp(1.8,1,e),1)})}
+  else{await camTo(shotAt(wt,back+.4,3+t*.3,1.3,.5),900);await wait(400+t*150)}
+  o.own=false;
+}
 
 const FX={
   async tornado(X){
@@ -526,7 +630,7 @@ async function play3D(evk,X){
   if(!innerWidth||!innerHeight||rc.width<40)throw new Error('board not visible');W3.W=innerWidth;W3.H=innerHeight;W3.cx=rc.left+rc.width/2;W3.cy=rc.top+rc.height/2;
   W3.R.setSize(W3.W,W3.H,false);W3.cv.style.width=W3.W+'px';W3.cv.style.height=W3.H+'px';W3.cam.aspect=W3.W/W3.H;W3.cam.fov=35;W3.cam.updateProjectionMatrix();
   W3.d=8*W3.H/(rc.width*2*Math.tan(35*Math.PI/360));
-  W3.flip=X.flip;W3.speed=1;W3.cleanup=[];W3.extra=[];W3.ice=[];W3.flash=0;W3.shake=0;W3.lvl=1;W3.wind=0;W3.lamp.userData.on=1;W3.skyTint=new T.Color(1,1,1);
+  W3.flip=X.flip;W3.speed=1;W3.cleanup=[];W3.onReturn=[];W3.extra=[];W3.ice=[];W3.flash=0;W3.shake=0;W3.lvl=1;W3.wind=0;W3.lamp.userData.on=1;W3.skyTint=new T.Color(1,1,1);
   W3.rainSpeed=38;W3.rainLen=1.1;W3.rain.material.color.setHex(0x9fb3d6);W3.rain.visible=true;W3.glass.visible=true;W3.frost.material.userData.base=0;W3.frost.material.opacity=0;
   W3.cup.rotation.set(0,0,0);W3.cup.position.set(6,-.3,2.2);W3.curt.forEach(c=>{c.rotation.set(0,0,0);c.position.z=-8.4});
   for(const k in W3.pcs)disposePiece(W3.pcs[k]);W3.pcs={};
@@ -540,12 +644,13 @@ async function play3D(evk,X){
   /* lift off */
   W3.speed=1;
   await Promise.all([camTo('board',1500),tween(900,e=>setRoomAlpha(e)),(async()=>{await wait(350);await tween(900,e=>W3.stand=e,easeO)})()]);
-  caption(EVENTS[evk]);
+  caption(X.cap||EVENTS[evk]);
   const needCh=['crow','ufo','ufoBack','watcher','meteor'];
   const generic=async()=>{await camTo('window',900);if(evk==='lightning'||evk==='meteor')SFX.thunder();else if(evk==='crow')SFX.caw();else if(evk.startsWith('ufo'))SFX.ufo();else SFX.wind(2.5);await wait(1400);await camTo('board',900)};
+  if(evk==='qcap')await qcapFX(X);else
   await ((X.res.miss&&needCh.includes(evk))||!FX[evk]?generic:FX[evk])(X);
   /* generic consequences for events whose FX did not move the pieces themselves */
-  if(X.res&&!['crow','quake','ufo','ufoBack','rainbow','watcher','meteor'].includes(evk))await applyChanges(X.res,evk==='tornado'?'fly':null);
+  if(X.res&&!['crow','quake','ufo','ufoBack','rainbow','watcher','meteor','qcap'].includes(evk))await applyChanges(X.res,evk==='tornado'?'fly':null);
   if(evk==='tornado'){await tween(700,e=>{W3.shake=.25*(1-e)})}
   if(X.res&&X.res.miss){await wait(400)}
   await wait(700);
@@ -561,7 +666,7 @@ async function play3D(evk,X){
   const crater=W3.crater;W3.crater=null;
   await Promise.all([
     camTo('top',1500),
-    tween(1300,e=>{W3.stand=1-e;spins.forEach(([o,s,t])=>{o.spin=s*(1-e);o.tint=lerp(t,1,e)});W3.ice.forEach(m=>m.material.opacity=.55*(1-e));if(crater)crater.material.opacity=.85*(1-e);W3.shake*=.9},easeIO),
+    tween(1300,e=>{W3.stand=1-e;W3.onReturn.forEach(f=>f(e));spins.forEach(([o,s,t])=>{o.spin=s*(1-e);o.tint=lerp(t,1,e)});W3.ice.forEach(m=>m.material.opacity=.55*(1-e));if(crater)crater.material.opacity=.85*(1-e);W3.shake*=.9},easeIO),
     (async()=>{await wait(700);await tween(800,e=>setRoomAlpha(1-e))})()
   ]);
   W3.shake=0;W3.flash=0;
@@ -573,7 +678,7 @@ async function play3D(evk,X){
 }
 /* fallback when WebGL / three.js is unavailable */
 async function play2D(evk,X){
-  const u=ui3();u.style.display='block';u.classList.add('on');caption(EVENTS[evk]);
+  const u=ui3();u.style.display='block';u.classList.add('on');caption(X.cap||EVENTS[evk]);if(evk==='qcap'){SFX.boom();await sleep(600)}
   const b=document.querySelector('#board');b.classList.add('wxShake');
   if(evk==='lightning'||evk==='meteor')SFX.thunder();else if(evk==='tornado'||evk==='fog')SFX.wind(3);else if(evk==='crow')SFX.caw();else if(evk.startsWith('ufo'))SFX.ufo();else if(evk==='quake')SFX.rumble();else if(evk==='rainbow')SFX.chime();else if(evk==='frost')SFX.freeze();
   await sleep(2200);b.classList.remove('wxShake');u.classList.remove('capOn','on');u.style.display='none';
@@ -608,17 +713,48 @@ let cssDone=false;function css(){if(cssDone)return;cssDone=true;const s=document
 
 const FREQ={rare:['Рідко',[16,22]],normal:['Нормально',[10,16]],often:['Часто',[6,10]],chaos:['Хаос',[3,5]]};
 
+/* ================= ONLINE (PeerJS, browser-to-browser) =================
+   The host decides all randomness (weather) and sends it to the guest, so both see the same thing. */
+const PFX='chstorm-';
+const NET={peer:null,conn:null,handler:null,onClose:null,isHost:false};
+let PEER_P=null;
+function loadPeer(){return PEER_P||(PEER_P=new Promise((res,rej)=>{if(window.Peer)return res();const s=document.createElement('script');s.src='https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';s.crossOrigin='anonymous';s.onload=()=>res();s.onerror=()=>{PEER_P=null;rej(new Error('peerjs'))};document.head.appendChild(s)}))}
+function netClose(){const c=NET.conn,p=NET.peer;NET.conn=NET.peer=null;NET.handler=null;NET.onClose=null;try{c&&c.close()}catch(e){}try{p&&p.destroy()}catch(e){}}
+function netSend(d){try{if(NET.conn&&NET.conn.open)NET.conn.send(d)}catch(e){}}
+function bindConn(c){NET.conn=c;c.on('data',d=>{if(!d||typeof d!=='object')return;if(d.t==='start'&&!NET.isHost){guestStart(d);return}NET.handler&&NET.handler(d)});c.on('close',()=>{if(NET.conn===c){NET.onClose&&NET.onClose()}});c.on('error',()=>{})}
+const netErr=e=>{const t=e&&e.type;return t==='peer-unavailable'?'Запрошення не знайдено. Можливо, друг закрив сторінку або посилання старе.':t==='network'||t==='server-error'||t==='socket-error'||t==='socket-closed'?'Немає зв’язку з сервером з’єднання. Перевір інтернет і спробуй ще раз.':t==='browser-incompatible'?'Цей браузер не підтримує гру по мережі.':'Не вдалося з’єднатися ('+(t||e&&e.message||'помилка')+').'};
+async function netHost(onReady,onConn,onErr){
+  await loadPeer();netClose();NET.isHost=true;
+  const code=Array.from({length:6},()=>'abcdefghjkmnpqrstuvwxyz23456789'[Math.floor(Math.random()*31)]).join('');
+  const peer=new window.Peer(PFX+code);NET.peer=peer;
+  peer.on('open',()=>onReady(code));
+  peer.on('connection',c=>{if(NET.conn&&NET.conn.open){c.on('open',()=>c.close());return}c.on('open',()=>{bindConn(c);onConn()})});
+  peer.on('error',e=>{if(NET.peer!==peer)return;if(e.type==='unavailable-id'){netHost(onReady,onConn,onErr);return}if(e.type==='peer-unavailable')return;onErr(e)});
+}
+async function netJoin(code,onOk,onErr){
+  await loadPeer();netClose();NET.isHost=false;
+  const peer=new window.Peer();NET.peer=peer;
+  peer.on('open',()=>{const c=peer.connect(PFX+code,{reliable:true});c.on('open',()=>{bindConn(c);onOk()})});
+  peer.on('error',e=>{if(NET.peer!==peer)return;onErr(e)});
+}
+function guestStart(d){
+  if(CUR&&CUR.stop)CUR.stop(true);CUR=null;closeModal();showMain();setNav('storm');
+  CUR=StormRun({mode:'net',host:false,color:d.color,freq:d.freq,forecast:d.forecast,nextAt:d.nextAt});
+}
+
 function StormRun(opt){
   css();loadThree().catch(()=>{});
   S.storm=S.storm||{games:0,seen:{}};
   const me={alive:true,stop};
-  const human=opt.mode==='bot'?(opt.color==='r'?(Math.random()<.5?'w':'b'):opt.color):null;
+  const NETM=opt.mode==='net',HOST=NETM&&opt.host;
+  const human=opt.mode==='bot'||NETM?(opt.color==='r'?(Math.random()<.5?'w':'b'):opt.color):null;
+  let waitHost=false,q=Promise.resolve();
   const L=LEVELS[opt.level]||LEVELS[1];
-  let g=new Chess(),busy=false,over=false,ply=0;
+  let g=opt.fen?new Chess(opt.fen):new Chess(),busy=false,over=false,ply=0;
   const gapR=FREQ[opt.freq][1];const gap=()=>gapR[0]+Math.floor(Math.random()*(gapR[1]-gapR[0]+1));
-  let nextAt=Math.max(6,gap()),upcoming=null;
+  let nextAt=opt.nextAt||Math.max(6,gap()),upcoming=null;
   const st={fog:0,fogR:null,frozen:{},ufo:null,secret:null};
-  const log=[];const forecast=makeForecast();
+  const log=[];const forecast=opt.forecast||makeForecast();
   board.clear();board.flip=human==='b';board.set(g);board.showDots=true;
   /* board hooks: frozen pieces cannot move, fog / ice / ufo marks drawn after every render */
   board.targets=function(from){if(st.frozen[from])return[];return Board.prototype.targets.call(this,from)};
@@ -630,14 +766,32 @@ function StormRun(opt){
   }
   const names=()=>{
     if(opt.mode==='friend'){const top=board.flip?'w':'b',bot=board.flip?'b':'w';players(plHtml(top==='w'?'Білі':'Чорні','друг',top),plHtml(bot==='w'?'Білі':'Чорні','друг',bot))}
+    else if(NETM)players(plHtml('Друг','🌐 по мережі',other(human)),plHtml('Ти','',human));
     else players(plHtml('Бот: '+L.n,'~'+L.elo,other(human)),plHtml('Ти','',human));
   };
   names();
-  board.canMove=()=>!busy&&!over&&me.alive&&(opt.mode==='friend'||g.turn()===human);
-  board.onMove=(m,noAnim)=>{if(!board.canMove())return;const mv=g.move(m);if(!mv)return;afterMove(mv,noAnim)};
+  board.canMove=()=>!busy&&!over&&me.alive&&!waitHost&&(opt.mode==='friend'||g.turn()===human);
+  board.onMove=(m,noAnim)=>{if(!board.canMove())return;const mv=g.move(m);if(!mv)return;
+    if(NETM){netSend({t:'mv',u:mUci(mv)});if(!HOST)waitHost=true}
+    afterMove(mv,noAnim)};
+  /* online: messages are processed strictly one after another */
+  if(NETM){
+    NET.handler=d=>{q=q.then(()=>onNet(d)).catch(e=>console.warn('net',e))};
+    NET.onClose=()=>{if(!me.alive)return;if(!over){over=true;busy=false;render({h:'🔌 Друг відключився. Партію зупинено.',k:'bad'})}else foot()};
+  }
+  async function onNet(d){
+    if(!me.alive)return;
+    if(d.t==='mv'){if(over)return;const mv=g.move(uciObj(d.u));if(!mv){if(!HOST)netSend({t:'sync?'});return}if(!HOST)waitHost=true;await afterMove(mv)}
+    else if(d.t==='ev'&&!HOST){await showEvent(d.k,d.res,d.fogR)}
+    else if(d.t==='ready'&&!HOST){if(d.fen&&d.fen!==g.fen()){g=new Chess(d.fen);board.set(g)}nextAt=d.nextAt;upcoming=d.upcoming||null;waitHost=false;busy=false;if(!over){if(!checkOver())render()}}
+    else if(d.t==='sync?'&&HOST){sendReady()}
+    else if(d.t==='resign'){finish(human,'Друг здався. Ти переміг!')}
+    else if(d.t==='bye'){if(!over){over=true;busy=false;render({h:'Друг вийшов з партії.',k:'bad'})}}
+  }
+  function sendReady(){if(HOST)netSend({t:'ready',ply,fen:g.fen(),nextAt,upcoming})}
 
   function render(msg){
-    const turnTxt=over?'':opt.mode==='friend'?`Хід ${g.turn()==='w'?'білих':'чорних'}`:g.turn()===human?'Твій хід':'Бот думає…';
+    const turnTxt=over?'':opt.mode==='friend'?`Хід ${g.turn()==='w'?'білих':'чорних'}`:g.turn()===human?(waitHost?'Синхронізація…':'Твій хід'):NETM?'Хід друга…':'Бот думає…';
     const eff=[];if(st.fog>0)eff.push(`🌫 туман: ще ${st.fog} півх.`);const fz=Object.keys(st.frozen);if(fz.length)eff.push(`❄ замерзли: ${fz.join(', ')}`);if(st.ufo)eff.push(`🛸 НЛО повернеться через ${Math.max(1,Math.ceil((st.ufo.at-ply)/2))} хід`);
     const left=Math.max(0,nextAt-ply);
     $('#pb').innerHTML=`${msg?`<div id="coachBox"></div>`:''}
@@ -652,12 +806,18 @@ function StormRun(opt){
     foot();
   }
   function foot(){
+    if(over&&NETM){
+      const alive=!!(NET.conn&&NET.conn.open);
+      $('#pf').innerHTML=(HOST&&alive?`<button class="btn" id="wxAgain">↻ Реванш (кольори міняються)</button>`:alive?`<div class="small mut" style="flex:1;align-self:center">Чекаємо, поки друг почне реванш…</div>`:'')+`<button class="btn g" id="wxMenu">Вийти</button>`;$('#pf').style.display='flex';
+      if($('#wxAgain'))$('#wxAgain').onclick=()=>{const fc=makeForecast(),na=Math.max(6,gap());netSend({t:'start',color:human,freq:opt.freq,forecast:fc,nextAt:na});stop(true);CUR=StormRun({...opt,color:other(human),forecast:fc,nextAt:na})};
+      $('#wxMenu').onclick=()=>showView('storm');return}
     if(over){$('#pf').innerHTML=`<button class="btn" id="wxAgain">↻ Ще раз</button><button class="btn g" id="wxMenu">Налаштування</button>`;$('#pf').style.display='flex';$('#wxAgain').onclick=()=>{stopCur();CUR=StormRun(opt)};$('#wxMenu').onclick=()=>showView('storm');return}
+    if(opt.gallery){$('#pf').innerHTML=`<button class="btn" id="wxGal">🎬 Обрати анімацію</button><button class="btn g sm" id="wxGalX">Вийти</button>`;$('#pf').style.display='flex';$('#wxGal').onclick=()=>galleryPick();$('#wxGalX').onclick=()=>showView('storm');return}
     $('#pf').innerHTML=`${st.secret&&!st.secret.show?'<button class="btn g sm" id="wxReveal">👁 Показати, що змінилося</button>':''}${opt.mode==='friend'?'<button class="btn g sm" id="wxFlip">⇅ Перевернути</button>':''}<button class="btn g sm" id="wxResign">🏳 ${opt.mode==='friend'?'Закінчити':'Здатися'}</button>`;
     $('#pf').style.display='flex';
     if($('#wxReveal'))$('#wxReveal').onclick=()=>{st.secret.show=true;board.arrows=[{from:st.secret.from,to:st.secret.to,c:'b'}];board.render();render()};
     if($('#wxFlip'))$('#wxFlip').onclick=()=>{board.flip=!board.flip;board.render();names()};
-    $('#wxResign').onclick=()=>{if(busy)return;finish(opt.mode==='friend'?null:other(human),opt.mode==='friend'?'Партію закінчено.':'Ти здався.')};
+    $('#wxResign').onclick=()=>{if(busy)return;if(NETM)netSend({t:'resign'});finish(opt.mode==='friend'?null:other(human),opt.mode==='friend'?'Партію закінчено.':'Ти здався.')};
   }
   function checkOver(){
     if(g.in_checkmate()){const w=other(g.turn());finish(w,`Мат! ${w==='w'?'Білі':'Чорні'} перемогли.`);return true}
@@ -671,7 +831,7 @@ function StormRun(opt){
     S.storm.games++;save();
     const ev=log.filter(x=>x.e).length;
     let h=`<b>${txt}</b><div class="small mut" style="margin-top:4px">Подій погоди за партію: ${ev}.</div>`;
-    if(opt.mode==='bot'){if(winner===human){h='🏆 '+h;confetti&&confetti();addXP&&addXP(30,'Перемога в бурі')}else if(winner)h='😵 '+h}
+    if(opt.mode==='bot'||NETM){if(winner===human){h='🏆 '+h;confetti&&confetti();addXP&&addXP(30,'Перемога в бурі')}else if(winner)h='😵 '+h}
     snd&&snd(winner?'win':'move');
     render({h,k:winner===human||!winner?'good':'bad'});
   }
@@ -683,13 +843,14 @@ function StormRun(opt){
     for(const k of Object.keys(st.frozen)){st.frozen[k]--;if(st.frozen[k]<=0)delete st.frozen[k]}
     if(st.fog>0)st.fog--;
     if(st.secret&&ply>=st.secret.until)st.secret=null;
+    if(mv.captured==='q')await queenCapture(mv);
     board.last=[mv.from,mv.to];board.arrows=[];board.render(noAnim?undefined:[mv.from,mv.to]);moveSound(mv,g);
-    if(checkOver())return;
+    if(checkOver()){sendReady();return}
     render();
     await weather();
-    if(!me.alive||over)return;
+    if(!me.alive||over){sendReady();return}
     unstick();
-    busy=false;render();
+    busy=false;render();sendReady();
     if(opt.mode==='bot'&&g.turn()!==human)botMove();
     else if(opt.mode==='friend'&&opt.autoFlip){board.flip=g.turn()==='b';board.render();names()}
   }
@@ -697,19 +858,30 @@ function StormRun(opt){
   function unstick(){const ms=g.moves({verbose:true});if(ms.length&&ms.every(m=>st.frozen[m.from])){st.frozen={};board.render()}}
 
   async function weather(){
+    if(NETM&&!HOST)return; /* the host decides the weather */
     /* UFO brings its passenger back */
     if(st.ufo&&ply>=st.ufo.at){const p=st.ufo.p;st.ufo=null;await runEvent('ufoBack',{ufoP:p});if(over||!me.alive)return}
     if(ply===nextAt-1&&!upcoming){upcoming=wpick(forecast);if(Math.random()<.04)upcoming='meteor';snd&&snd('click');render()}
+    if(opt.gallery)return;
     if(ply>=nextAt){const k=upcoming||wpick(forecast);upcoming=null;nextAt=ply+gap();await runEvent(k,{})}
   }
   async function runEvent(k,extra){
     if(!me.alive)return;busy=true;const ev=EVENTS[k];
     const fen=g.fen();const map0=mapOf(g);const turn=g.turn();
     let fogZ=null,fogR=null;
-    if(k==='fog'){fogR=opt.mode==='bot'?(human==='w'?[5,8]:[1,4]):[3,6];const z=r=>W3flipZ(r);fogZ=[z(fogR[0]),z(fogR[1])]}
-    const X={turn,fen,human,ufoP:extra.ufoP};
+    if(k==='fog')fogR=opt.mode==='bot'?(human==='w'?[5,8]:[1,4]):[3,6];
+    const X={turn,fen,human:NETM?null:human,ufoP:extra.ufoP};
     let res=ev.apply(map0,X);
     if(!res)res={fen,ch:[],miss:true,note:`${ev.n} пройшов${k==='crow'||k==='rainbow'?'ла':''} повз: на дошці нічого не змінилося.`};
+    if(NETM)netSend({t:'ev',k,res,fogR});
+    await showEvent(k,res,fogR);
+  }
+  async function showEvent(k,res,fogR){
+    if(!me.alive)return;busy=true;const ev=EVENTS[k];
+    const fen=g.fen();const map0=mapOf(g);const turn=g.turn();
+    const fogZ=fogR?[W3flipZ(fogR[0]),W3flipZ(fogR[1])]:null;
+    const X={turn,fen,human};
+    if(k==='ufoBack')st.ufo=null;
     {const r0=$('#board').getBoundingClientRect();if(r0.top<0||r0.bottom>innerHeight){$('#board').scrollIntoView({block:'center'});await sleep(250)}}
     const rect=$('#board').getBoundingClientRect();
     const ctx={...X,res,map0,flip:board.flip,last:board.last,rect,fogZ,hide2D:h=>{$('#board').style.visibility=h?'hidden':''}};
@@ -717,7 +889,7 @@ function StormRun(opt){
     try{await play3D(k,ctx)}catch(e){console.warn('storm 3D failed',e);$('#board').style.visibility='';try{W3.on=false;W3.cv&&(W3.cv.style.display='none');W3.ui&&(W3.ui.style.display='none')}catch(_){}await play2D(k,ctx)}
     if(!me.alive){$('#board').style.visibility='';return}
     /* apply */
-    if(res.fen!==fen){g=new Chess(res.fen);board.set(g)}
+    if(res.fen!==g.fen()){g=new Chess(res.fen);board.set(g)}
     board.last=null;board.arrows=[];
     if(res.fog){st.fog=res.fog;st.fogR=fogR}
     if(res.freeze)res.freeze.forEach(s=>st.frozen[s]=4);
@@ -732,6 +904,19 @@ function StormRun(opt){
     if(checkOver())return;
     if(g.in_check())snd&&snd('check');
   }
+  /* replays the capture as a 3D cutscene: the 2D board still shows the position before the move */
+  async function queenCapture(mv){
+    if(!me.alive)return;busy=true;
+    const u=g.undo();if(!u)return;const map0=mapOf(g);const last0=board.last;g.move({from:u.from,to:u.to,promotion:u.promotion});
+    board.sel=null;
+    {const r0=$('#board').getBoundingClientRect();if(r0.top<0||r0.bottom>innerHeight){$('#board').scrollIntoView({block:'center'});await sleep(250)}}
+    const ctx={turn:g.turn(),fen:g.fen(),res:{fen:g.fen(),ch:[]},map0,flip:board.flip,last:last0,rect:$('#board').getBoundingClientRect(),
+      qc:{from:mv.from,to:mv.to,p:mv.piece},cap:qcapCaption(mv.piece),hide2D:h=>{$('#board').style.visibility=h?'hidden':''}};
+    try{await play3D('qcap',ctx)}catch(e){console.warn('capture 3D failed',e);$('#board').style.visibility='';try{W3.on=false;W3.cv&&(W3.cv.style.display='none');W3.ui&&(W3.ui.style.display='none')}catch(_){}await play2D('qcap',ctx)}
+    $('#board').style.visibility='';
+    if(me.alive){S.storm.qcap=S.storm.qcap||{};S.storm.qcap[mv.piece]=(S.storm.qcap[mv.piece]||0)+1;save();log.push({e:`${QCAP[mv.piece].i} ${QCAP[mv.piece].n}`})}
+  }
+  me._mv=(from,to)=>{if(busy||over)return'busy';const mv=g.move({from,to,promotion:'q'});if(!mv)return'illegal';afterMove(mv);return'ok'};
   function W3flipZ(rank){/* rank 1..8 → world z of that rank's centre (for fog planes) */const r=rank-1;return board.flip?r-3.5:3.5-r}
 
   async function botMove(){
@@ -748,11 +933,14 @@ function StormRun(opt){
     const mv=g.move(uciObj(uci));if(!mv){busy=false;return}
     afterMove(mv);
   }
-  me._ev=(k,p)=>{if(busy||over)return'busy';runEvent(k,{ufoP:p||{type:'n',color:'w'}}).then(()=>{busy=false;render();if(opt.mode==='bot'&&g.turn()!==human&&!over)botMove()});return'ok'};
-  function stop(){me.alive=false;delete board.targets;delete board.render;$('#board').style.visibility='';board.arrows=[];
-    if(W3.on){W3.speed=20}}
+  me._ev=(k,p)=>{if(busy||over||(NETM&&!HOST))return'busy';runEvent(k,{ufoP:p||{type:'n',color:'w'}}).then(()=>{busy=false;render();sendReady();if(opt.mode==='bot'&&g.turn()!==human&&!over)botMove()});return'ok'};
+  function stop(keepNet){me.alive=false;delete board.targets;delete board.render;$('#board').style.visibility='';board.arrows=[];
+    if(W3.on){W3.speed=20}
+    if(NETM&&!keepNet){netSend({t:'bye'});netClose()}}
 
-  render({h:opt.mode==='friend'?'Грайте по черзі на одному пристрої. Слідкуйте за прогнозом: погода б’є по обох однаково, але виграє той, хто краще нею скористається.':'Звичайні шахи… поки не зміниться погода. Стеж за прикметами: за хід до події з’являється попередження.'});
+  me.busy=()=>busy||(W3.on===true);
+  if(opt.gallery){render({h:'🎬 <b>Галерея анімацій.</b> Обери будь-яку анімацію: погоду або взяття ферзя. Між анімаціями можна ходити фігурами.'});if(!opt.noPick)setTimeout(galleryPick,300);return me}
+  render({h:NETM?`🌐 Ви з’єднані! Ти граєш <b>${human==='w'?'білими':'чорними'}</b>. Погода однакова для обох, і ви бачите її одночасно.`:opt.mode==='friend'?'Грайте по черзі на одному пристрої. Слідкуйте за прогнозом: погода б’є по обох однаково, але виграє той, хто краще нею скористається.':'Звичайні шахи… поки не зміниться погода. Стеж за прикметами: за хід до події з’являється попередження.'});
   if(opt.mode==='bot'&&g.turn()!==human)botMove();
   return me;
 }
@@ -767,24 +955,121 @@ window.viewStorm=function(){
   function ui(){
     const seen=S.storm.seen||{};
     panel('🌪 Шахи-Буря',`<div id="coachBox"></div>
-      <div class="card"><h4>З ким граєш</h4><div class="chips">${[['bot','🤖 З ботом'],['friend','👥 З другом (на одному пристрої)']].map(([k,n])=>`<button class="chip ${mode===k?'on':''}" data-m="${k}">${n}</button>`).join('')}</div>
+      <div class="card"><h4>З ким граєш</h4><div class="chips">${[['bot','🤖 З ботом'],['friend','👥 З другом (на одному пристрої)'],['net','🌐 З другом по мережі']].map(([k,n])=>`<button class="chip ${mode===k?'on':''}" data-m="${k}">${n}</button>`).join('')}</div>
         ${mode==='friend'?`<label class="small" style="display:flex;gap:6px;margin-top:8px;cursor:pointer"><input type="checkbox" id="wxAF" ${autoFlip?'checked':''}> Перевертати дошку після кожного ходу</label>`:''}</div>
       ${mode==='bot'?`<div class="card"><h4>Суперник</h4><div class="list">${LEVELS.map((l,i)=>`<div class="it" data-lv="${i}" style="${i===lvl?'outline:2px solid var(--green)':''}"><img src="${PIC('b',['p','p','n','b','r','q','q','k','k'][i])}" width="28"><span class="nm">${l.n}</span><span class="dim small">~${l.elo}</span></div>`).join('')}</div>
         <h4 style="margin-top:12px">Колір</h4><div class="chips">${[['w','Білі'],['b','Чорні'],['r','Випадково']].map(([k,n])=>`<button class="chip ${col===k?'on':''}" data-c="${k}">${n}</button>`).join('')}</div></div>`:''}
+      ${mode==='net'?`<div class="card"><h4>Твій колір</h4><div class="chips">${[['w','Білі'],['b','Чорні'],['r','Випадково']].map(([k,n])=>`<button class="chip ${col===k?'on':''}" data-c="${k}">${n}</button>`).join('')}</div>
+        <div class="small mut" style="margin-top:8px">Натисни «Створити запрошення», надішли посилання другу (Telegram, Discord…). Коли він його відкриє, партія почнеться сама. Не закривай цю сторінку, поки чекаєш.</div></div>`:''}
       <div class="card"><h4>Як часто змінюється погода</h4><div class="chips">${Object.entries(FREQ).map(([k,[n,r]])=>`<button class="chip ${freq===k?'on':''}" data-f="${k}">${n}</button>`).join('')}</div>
         <div class="small mut" style="margin-top:6px">Приблизно кожні ${Math.round(FREQ[freq][1][0]/2)}–${Math.round(FREQ[freq][1][1]/2)} ходів.</div></div>
       <div class="card"><h4>📖 Можлива погода</h4>${POOL.map(k=>`<div class="wxEv" style="${seen[k]?'':'opacity:.75'}"><span class="i">${EVENTS[k].i}</span><div style="flex:1"><b>${EVENTS[k].n}</b> <span class="tag" style="background:${RAR[EVENTS[k].rar].col};color:#111">${RAR[EVENTS[k].rar].n}</span>${seen[k]?` <span class="small dim">бачив ×${seen[k]}</span>`:''}<div class="small mut">${EVENTS[k].d}</div></div></div>`).join('')}</div>`,
-      `<button class="btn" id="wxStart">🌪 Грати</button>`);
+      mode==='net'?`<button class="btn" id="wxInvite">🔗 Створити запрошення</button>`:`<button class="btn" id="wxStart">🌪 Грати</button>`);
     coachSay('Звичайні шахи на звичайній дошці. Але раз на кілька ходів камера відривається від дошки, фігури встають, і за вікном щось починається. Перед кожною партією по радіо дають прогноз: 4 види погоди, які можуть трапитися.');
     document.querySelectorAll('[data-m]').forEach(e=>e.onclick=()=>{mode=e.dataset.m;S.stormMode=mode;save();players(plHtml(mode==='bot'?'Бот':'Друг','','b'),plHtml('Ти','','w'));ui()});
     document.querySelectorAll('[data-lv]').forEach(e=>e.onclick=()=>{lvl=+e.dataset.lv;ui()});
     document.querySelectorAll('[data-c]').forEach(e=>e.onclick=()=>{col=e.dataset.c;ui()});
     document.querySelectorAll('[data-f]').forEach(e=>e.onclick=()=>{freq=e.dataset.f;S.stormFreq=freq;save();ui()});
     if($('#wxAF'))$('#wxAF').onchange=e=>{autoFlip=e.target.checked;S.stormFlip=autoFlip;save()};
-    $('#wxStart').onclick=()=>{panel('🌪 Шахи-Буря','','');CUR=StormRun({mode,level:lvl,color:col,freq,autoFlip})};
+    if($('#wxStart'))$('#wxStart').onclick=()=>{panel('🌪 Шахи-Буря','','');CUR=StormRun({mode,level:lvl,color:col,freq,autoFlip})};
+    if($('#wxInvite'))$('#wxInvite').onclick=()=>hostWait(col,freq);
   }
   ui();
 };
+
+/* host: create an invite link and wait for the friend */
+function hostWait(col,freq){
+  const myC=col==='r'?(Math.random()<.5?'w':'b'):col;
+  const show=(html,foot)=>panel('🌐 Запрошення',`<div id="coachBox"></div>${html}`,foot||`<button class="btn g" id="wxCancel">Скасувати</button>`);
+  const bindCancel=()=>{if($('#wxCancel'))$('#wxCancel').onclick=()=>{netClose();showView('storm')}};
+  show(`<div class="card"><div class="small mut">Створюю запрошення…</div></div>`);bindCancel();
+  coachSay('Секунду, готую посилання для друга.');
+  CUR={stop(keep){if(!keep)netClose()}};
+  netHost(code=>{
+    const link=location.origin+location.pathname+'?storm='+code;
+    show(`<div class="card"><h4>🔗 Посилання для друга</h4>
+      <input id="wxLink" readonly value="${esc(link)}" style="width:100%;padding:9px;border-radius:6px;border:1px solid #3c3a37;background:#1f1e1b;color:#fff;font-size:14px" onclick="this.select()">
+      <div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn sm" id="wxCopy">📋 Копіювати</button>${navigator.share?'<button class="btn g sm" id="wxShare">📤 Поділитися</button>':''}</div>
+      <div class="small mut" style="margin-top:10px">Код запрошення: <b style="font-size:18px;letter-spacing:.15em;color:#fff">${code}</b></div></div>
+      <div class="card small">⏳ Чекаємо друга… Ти граєш <b>${myC==='w'?'білими':'чорними'}</b>, погода: <b>${FREQ[freq][0].toLowerCase()}</b>.</div>`);
+    bindCancel();
+    coachSay('Надішли це посилання другу. Щойно він його відкриє, партія почнеться в обох.');
+    $('#wxCopy').onclick=()=>{const t=$('#wxLink');t.select();(navigator.clipboard?navigator.clipboard.writeText(link):Promise.reject()).then(()=>toast('Посилання скопійовано')).catch(()=>{document.execCommand('copy');toast('Посилання скопійовано')})};
+    if($('#wxShare'))$('#wxShare').onclick=()=>navigator.share({title:'Шахи-Буря',text:'Зіграймо в Шахи-Бурю! 🌪',url:link}).catch(()=>{});
+  },()=>{
+    const fc=makeForecast(),na=Math.max(6,FREQ[freq][1][0]+Math.floor(Math.random()*(FREQ[freq][1][1]-FREQ[freq][1][0]+1)));
+    netSend({t:'start',color:other(myC),freq,forecast:fc,nextAt:na});
+    snd&&snd('good');
+    if(CUR&&CUR.stop)CUR.stop(true);CUR=null;panel('🌪 Шахи-Буря','','');
+    CUR=StormRun({mode:'net',host:true,color:myC,freq,forecast:fc,nextAt:na});
+  },e=>{show(`<div class="card" style="border:2px solid var(--red)">${esc(netErr(e))}</div>`,`<button class="btn" id="wxRetry">Спробувати ще раз</button><button class="btn g" id="wxCancel">Назад</button>`);bindCancel();$('#wxRetry').onclick=()=>hostWait(col,freq)}).catch(()=>{show(`<div class="card" style="border:2px solid var(--red)">Не вдалося завантажити модуль гри по мережі. Перевір інтернет.</div>`);bindCancel()});
+}
+
+/* ================= SECRET ANIMATION GALLERY =================
+   Type 20118 anywhere (not in a text field) → password window → 8888 → watch any event. */
+const GAL_FEN='r1bqk2r/pp1n1ppp/2pbpn2/3p4/2PP4/2N1PN2/PPQ1BPPP/R1B1K2R w KQkq - 0 8';
+/* demo positions: white captures the black queen with the given piece */
+const CAPDEMO={
+  p:{fen:'4k3/pp4pp/8/3q4/4P3/8/PP4PP/4K3 w - - 0 1',m:['e4','d5']},
+  n:{fen:'4k3/pp4pp/8/4q3/8/5N2/PP4PP/4K3 w - - 0 1',m:['f3','e5']},
+  b:{fen:'4k3/pp3qpp/8/8/2B5/8/PP4PP/4K3 w - - 0 1',m:['c4','f7']},
+  r:{fen:'4k3/pp4pp/3q4/8/8/8/PP4PP/3RK3 w - - 0 1',m:['d1','d6']},
+  q:{fen:'4k3/pp1q2pp/8/8/8/8/PP4PP/3QK3 w - - 0 1',m:['d1','d7']},
+  k:{fen:'4k3/pp4pp/8/8/8/8/PP2q1PP/4K3 w - - 0 1',m:['e1','e2']},
+};
+function galleryPick(){
+  const list=[...POOL,'ufoBack'];
+  const caps=['p','n','b','r','q','k'];
+  modal(`<h2>🎬 Галерея анімацій</h2><div style="text-align:left;max-height:62vh;overflow:auto">
+    <h4 style="margin:4px 0 6px">💥 Взяття ферзя</h4><div class="list">${caps.map(p=>`<div class="it" data-gq="${p}"><img src="${PIC('w',p)}" width="28"><span class="nm">${QCAP[p].n}</span><span class="tag" style="background:var(--gold);color:#111">${'★'.repeat(QTIER[p])}${'☆'.repeat(4-QTIER[p])}</span></div>`).join('')}</div>
+    <h4 style="margin:12px 0 6px">🌪 Погода</h4><div class="list">${list.map(k=>`<div class="it" data-gk="${k}"><span style="font-size:22px;width:30px;text-align:center">${EVENTS[k].i}</span><span class="nm">${EVENTS[k].n}${k==='ufoBack'?' (повернення)':''}</span><span class="tag" style="background:${RAR[EVENTS[k].rar].col};color:#111">${RAR[EVENTS[k].rar].n}</span></div>`).join('')}</div></div>
+    <button class="btn g" style="width:100%;margin-top:10px" onclick="closeModal()">Закрити</button>`);
+  document.querySelectorAll('[data-gk]').forEach(e=>e.onclick=()=>{closeModal();galleryRun(GAL_FEN,r=>r._ev(e.dataset.gk,{type:'b',color:'b'}))});
+  document.querySelectorAll('[data-gq]').forEach(e=>e.onclick=()=>{closeModal();const d=CAPDEMO[e.dataset.gq];galleryRun(d.fen,r=>r._mv(d.m[0],d.m[1]))});
+}
+function galleryRun(fen,act){
+  if(CUR&&CUR.busy&&CUR.busy()){toast('Зачекай, поки закінчиться поточна анімація');return}
+  if(CUR&&CUR.stop)CUR.stop();
+  CUR=StormRun({mode:'friend',freq:'rare',gallery:true,noPick:true,fen});
+  const run=CUR;setTimeout(()=>{if(CUR===run)act(run)},700);
+}
+function openGallery(){closeModal();showView('storm');panel('🌪 Шахи-Буря','','');CUR=StormRun({mode:'friend',freq:'rare',gallery:true,fen:GAL_FEN})}
+function askGalleryPassword(){
+  modal(`<h2>🔒 Секретний вхід</h2><p class="small mut">Введи пароль</p>
+    <input id="galPw" type="password" inputmode="numeric" autocomplete="off" style="width:100%;padding:10px;border-radius:6px;border:1px solid #3c3a37;background:#1f1e1b;color:#fff;font-size:20px;text-align:center;letter-spacing:.3em">
+    <div id="galErr" class="small" style="color:var(--red);min-height:18px;margin-top:6px"></div>
+    <div class="row" style="gap:8px;margin-top:6px"><button class="btn" id="galOk" style="flex:1">Увійти</button><button class="btn g" style="flex:1" onclick="closeModal()">Скасувати</button></div>`);
+  const inp=$('#galPw');setTimeout(()=>inp.focus(),50);
+  const ok=()=>{if(inp.value.trim()==='8888'){snd&&snd('good');openGallery()}else{$('#galErr').textContent='Неправильний пароль';inp.value='';inp.focus();snd&&snd('bad')}};
+  $('#galOk').onclick=ok;inp.onkeydown=e=>{if(e.key==='Enter')ok()};
+}
+{
+  let buf='';
+  document.addEventListener('keydown',e=>{
+    const t=e.target;if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable))return;
+    if(e.key&&e.key.length===1&&e.key>='0'&&e.key<='9'){buf=(buf+e.key).slice(-5);if(buf==='20118'){buf='';askGalleryPassword()}}
+  });
+}
+
+/* guest: opened an invite link */
+function joinInvite(code){
+  showView('storm');
+  const show=(html,foot)=>panel('🌐 Гра по мережі',`<div id="coachBox"></div>${html}`,foot||`<button class="btn g" id="wxCancel">Скасувати</button>`);
+  const bindCancel=()=>{if($('#wxCancel'))$('#wxCancel').onclick=()=>{netClose();showView('storm')}};
+  show(`<div class="card">⏳ Підключаюся до друга (код <b>${esc(code)}</b>)…</div>`);bindCancel();
+  coachSay('Тебе запросили в Шахи-Бурю! Звичайні шахи, але погода за вікном змінює партію.');
+  CUR={stop(keep){if(!keep)netClose()}};
+  netJoin(code,()=>{show(`<div class="card">✅ З’єднано! Чекаю на початок партії…</div>`);bindCancel()},
+    e=>{show(`<div class="card" style="border:2px solid var(--red)">${esc(netErr(e))}</div>`,`<button class="btn" id="wxRetry">Спробувати ще раз</button><button class="btn g" id="wxCancel">Назад</button>`);bindCancel();$('#wxRetry').onclick=()=>joinInvite(code)}).catch(()=>{show(`<div class="card" style="border:2px solid var(--red)">Не вдалося завантажити модуль гри по мережі. Перевір інтернет.</div>`);bindCancel()});
+}
+{
+  const inv=new URLSearchParams(location.search).get('storm');
+  if(inv&&/^[a-z0-9]{4,12}$/.test(inv)){
+    history.replaceState(null,'',location.pathname);
+    const go=()=>setTimeout(()=>{closeModal();joinInvite(inv)},700);
+    if(document.readyState==='complete')go();else window.addEventListener('load',go);
+  }
+}
 window.STORM_EVENTS=EVENTS; /* for debugging */
 window.stormDebug={run:(k,p)=>CUR&&CUR._ev&&CUR._ev(k,p),W3};
 })();
