@@ -245,7 +245,7 @@ body.wood .sq.d.hl{background-image:linear-gradient(rgba(170,190,40,.5),rgba(170
     <a data-v="settings"><span class="ic">⚙️</span>Налаштування</a>
     <div class="me"><div id="meRank"></div><div class="xpbar"><i id="meXp"></i></div><div id="meXpT" class="small" style="margin-top:4px"></div><div id="meElo" class="small" style="margin-top:8px;cursor:pointer" title="Змінити ело"></div><div style="margin-top:8px"><label class="small"><input type="checkbox" id="sndChk" checked> Звук</label></div>
       <div style="margin-top:8px" class="small">🎨 Дошка:<select id="thSel" style="width:100%;margin-top:3px;background:#1f1e1b;color:#fff;border:1px solid #3c3a37;border-radius:4px;padding:3px"><option value="green">🟩 Зелена</option><option value="wood">🪵 Деревʼяна</option></select></div>
-      <div style="margin-top:8px" class="small">🧠 Хто думає:<select id="engSel" style="width:100%;margin-top:3px;background:#1f1e1b;color:#fff;border:1px solid #3c3a37;border-radius:4px;padding:3px"><option value="auto">Авто (найкраще доступне)</option><option value="native">💻 Процесор комп’ютера</option><option value="browser">🌐 Браузер, швидкий (7 МБ)</option><option value="full">🌐 Браузер, повний (80 МБ, сильніший, багатоядерний)</option></select>
+      <div style="margin-top:8px" class="small">🧠 Хто думає:<select id="engSel" style="width:100%;margin-top:3px;background:#1f1e1b;color:#fff;border:1px solid #3c3a37;border-radius:4px;padding:3px"><option value="auto">Авто (найкраще доступне)</option><option value="native">💻 Процесор комп’ютера</option><option value="browser">🌐 Браузер, швидкий (2 МБ)</option><option value="full">🌐 Браузер, повний (100 МБ, сильніший, багатоядерний)</option></select>
       <button id="syBtn" class="btn g sm" style="margin-top:8px;width:100%">🔄 Синхронізація</button>
       <a id="pcDl" class="btn g sm" style="display:none;margin-top:8px;text-align:center;text-decoration:none" href="https://github.com/ramka1q/chess-trainer/releases/latest/download/chess-trainer-pc.zip">⬇ Скачати для ПК (Stockfish 19)</a><div id="engName" class="dim" style="margin-top:3px;font-size:11px"></div></div></div>
   </nav>
@@ -271,8 +271,8 @@ body.wood .sq.d.hl{background-image:linear-gradient(rgba(170,190,40,.5),rgba(170
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="pieces.js"></script>
 <script src="masters.js"></script>
-<script src="storm.js?v=1.9.3" defer></script>
-<script src="icons.js?v=1.9.3" defer></script>
+<script src="storm.js?v=2.0.0" defer></script>
+<script src="icons.js?v=2.0.0" defer></script>
 <script>
 "use strict";
 /* ================= UTIL ================= */
@@ -586,15 +586,19 @@ const CLS={
 const SF_URL='https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js';
 let SF_BLOB=null,SF_FAIL=false;
 async function sfBlob(){if(SF_BLOB)return SF_BLOB;const r=await fetch(SF_URL);if(!r.ok)throw new Error('sf');SF_BLOB=URL.createObjectURL(new Blob([await r.text()],{type:'application/javascript'}));return SF_BLOB}
-/* Stockfish 17.1 with NNUE neural network (same engine family chess.com uses), loaded from the official npm package.
-   The worker script is wrapped in a Blob; the #hash tells it where to fetch its .wasm from. */
-const SF17_JS='https://unpkg.com/stockfish@17.1.0/src/stockfish-17.1-lite-single-03e3232.js';
-const SF17_WASM='https://unpkg.com/stockfish@17.1.0/src/stockfish-17.1-lite-single-03e3232.wasm';
-const SF17F_JS='https://unpkg.com/stockfish@17.1.0/src/stockfish-17.1-single-a496a04.js';
-const SF17F_WASM='https://unpkg.com/stockfish@17.1.0/src/stockfish-17.1-single-a496a04.wasm'; /* loaded as 6 parts (-part-0..5.wasm) */
+/* Stockfish 19 with NNUE neural network (stockfish.js 19.0.1, the newest browser build), from the official npm package.
+   The worker script is wrapped in a Blob; the #hash tells it where to fetch its .wasm from.
+   (Variable names still say "17" for history; the engine is 19.) */
+const SF_VER='19';
+const SF17_JS='https://unpkg.com/stockfish@19.0.1/bin/stockfish-19-lite-single.js';
+const SF17_WASM='https://unpkg.com/stockfish@19.0.1/bin/stockfish-19-lite-single.wasm';   /* light: ~1.8 MB */
+const SF17F_JS='https://unpkg.com/stockfish@19.0.1/bin/stockfish-19-single.js';
+const SF17F_WASM='https://unpkg.com/stockfish@19.0.1/bin/stockfish-19-single.wasm';      /* full: ~99 MB */
 /* multi-core build: needs a cross-origin isolated page (the service worker adds the headers) */
-const SF17M_JS='stockfish-mt.js'; /* copy of stockfish@17.1.0 src/stockfish-17.1-8e4d048.js (GPLv3) */
-const SF17M_WASM='https://unpkg.com/stockfish@17.1.0/src/stockfish-17.1-8e4d048.wasm';
+const SF17M_JS='stockfish19-mt.js'; /* copy of stockfish@19.0.1 bin/stockfish-19.js (GPLv3) */
+const SF17M_WASM='https://unpkg.com/stockfish@19.0.1/bin/stockfish-19.wasm';
+/* files of the old 17.1 engine are removed from the device once (they took ~90 MB) */
+if(self.caches)caches.open('trainer-libs-v1').then(c=>c.keys().then(ks=>ks.forEach(k=>{if(k.url.includes('stockfish@17.1.0'))c.delete(k)}))).catch(()=>{});
 const canMulti=()=>self.crossOriginIsolated&&typeof SharedArrayBuffer!=='undefined'&&(navigator.hardwareConcurrency||1)>2&&!S.noMulti;
 const mtThreads=()=>Math.max(2,Math.min(8,(navigator.hardwareConcurrency||4)-1));
 let SF17_FAIL=false;const SF_BLOBS={};
@@ -603,9 +607,8 @@ if(navigator.storage&&navigator.storage.persist)navigator.storage.persisted().th
 function preloadEngine(full,multi,silent){
   const key=multi?'multi':full?'full':'lite';PRELOAD=PRELOAD||{};
   if(!PRELOAD[key])PRELOAD[key]=(async()=>{
-    const base=(multi?SF17M_WASM:full?SF17F_WASM:SF17_WASM).replace(/\.wasm$/,'');
-    const urls=full?[0,1,2,3,4,5].map(i=>`${base}-part-${i}.wasm`):[SF17_WASM];
-    const sizes=full?Array(6).fill(multi?13144776:13175551):[7280741];const total=sizes.reduce((a,b)=>a+b,0);
+    const urls=[multi?SF17M_WASM:full?SF17F_WASM:SF17_WASM];
+    const sizes=[multi?99076105:full?99169054:1845971];const total=sizes.reduce((a,b)=>a+b,0);
     let done=0,shown=false;const t0=Date.now();
     /* files already saved on this device are not read again (that used to look like a new download on phones) */
     const LIB=self.caches?await caches.open('trainer-libs-v1').catch(()=>null):null;
@@ -650,7 +653,7 @@ class Engine{
           const full=(engineMode()==='full'||(engineMode()==='auto'&&S.autoFull===true))&&this.slot==='coach';const multi=full&&canMulti();this.multi=multi;this.full=full;
           await preloadEngine(full,multi);
           /* the multi-core build must run from our own origin (it starts helper workers from its own URL) */
-          const u=multi?'stockfish-mt.js':await sf17Blob(full?SF17F_JS:SF17_JS);this.w=new Worker(u+'#'+encodeURIComponent(multi?SF17M_WASM:full?SF17F_WASM:SF17_WASM));
+          const u=multi?SF17M_JS:await sf17Blob(full?SF17F_JS:SF17_JS);this.w=new Worker(u+'#'+encodeURIComponent(multi?SF17M_WASM:full?SF17F_WASM:SF17_WASM));
           this.w.onmessage=e=>{const l=typeof e.data==='string'?e.data:'';for(const f of this.ls.slice())f(l)};
           this.send('uci');
           const ok=await Promise.race([this.wait(l=>l==='uciok').then(()=>true),sleep(full?400000:25000).then(()=>false)]);
@@ -658,7 +661,7 @@ class Engine{
           this.send('setoption name Hash value '+(multi?64:32));
           if(multi&&this.slot==='coach')this.send('setoption name Threads value '+mtThreads());
           this.send('isready');await this.wait(l=>l==='readyok');
-          this.name=multi&&this.slot==='coach'?`Stockfish 17.1 NNUE (повний, ${mtThreads()} ${plural(mtThreads(),'ядро','ядра','ядер')})`:full?'Stockfish 17.1 NNUE (повний, браузер)':'Stockfish 17.1 NNUE (браузер)';return;
+          this.name=multi&&this.slot==='coach'?`Stockfish 19 NNUE (повний, ${mtThreads()} ${plural(mtThreads(),'ядро','ядра','ядер')})`:full?'Stockfish 19 NNUE (повний, браузер)':'Stockfish 19 NNUE (браузер)';return;
         }catch(e){
           if(this.multi&&!S.noMulti){console.warn('multi-core engine failed, using single-core',e);S.noMulti=true;save();try{this.w&&this.w.terminate()}catch(_){}this.ls=[];this.ready=null;return this.init()}
           /* the automatic choice turned out too heavy after all: go back to the light engine for good */
@@ -742,12 +745,12 @@ async function runEval(){
 /* ---- automatic engine choice ----
    Everyone starts with the light engine (7 MB). Later, in the background, the device is tested:
    memory, cores, and how fast the light engine counts. A strong device then downloads the full engine
-   (~80 MB, silently, also on mobile data) and runs it once; if it starts and counts fine, the coach
+   (~100 MB, silently, also on mobile data) and runs it once; if it starts and counts fine, the coach
    uses it from the next visit. Otherwise the light one stays and the big files are deleted again. */
 const AUTO_V=1;let AUTOCHK=false;
 async function benchWorker(full,multi,ms){
   const wasm=multi?SF17M_WASM:full?SF17F_WASM:SF17_WASM;
-  const u=multi?'stockfish-mt.js':await sf17Blob(full?SF17F_JS:SF17_JS);
+  const u=multi?SF17M_JS:await sf17Blob(full?SF17F_JS:SF17_JS);
   const w=new Worker(u+'#'+encodeURIComponent(wasm));const t0=Date.now();
   let nps=0,init=0,res;const done=new Promise(r=>res=r);
   w.onmessage=e=>{const l=typeof e.data==='string'?e.data:'';const m=l.match(/ nps (\d+)/);if(m)nps=+m[1];
@@ -759,7 +762,7 @@ async function benchWorker(full,multi,ms){
   return ok&&nps?{nps,init}:null;
 }
 async function dropFullFiles(multi){
-  try{const c=await caches.open('trainer-libs-v1');const base=(multi?SF17M_WASM:SF17F_WASM).replace(/\.wasm$/,'');for(let i=0;i<6;i++)await c.delete(`${base}-part-${i}.wasm`)}catch(e){}
+  try{const c=await caches.open('trainer-libs-v1');await c.delete(multi?SF17M_WASM:SF17F_WASM)}catch(e){}
   if(PRELOAD){delete PRELOAD.full;delete PRELOAD.multi}
 }
 async function autoEngineCheck(force){
@@ -775,7 +778,7 @@ async function autoEngineCheck(force){
     if(cores<4)return fin('lite',`замало ядер процесора (${cores})`);
     const lite=await benchWorker(false,false,1500);
     if(!lite)return fin('lite','легкий рушій не відповів');
-    if(lite.nps<250000)return fin('lite',`пристрій рахує повільно (${Math.round(lite.nps/1000)} тис. позицій/с)`,{nps:lite.nps});
+    if(lite.nps<200000)return fin('lite',`пристрій рахує повільно (${Math.round(lite.nps/1000)} тис. позицій/с)`,{nps:lite.nps});
     const multi=canMulti();
     await preloadEngine(true,multi,true);
     const full=await benchWorker(true,multi,2000);
@@ -789,8 +792,8 @@ async function autoEngineCheck(force){
   }catch(e){AUTOCHK=false;S.autoEng=null}
 }
 const DEVOPT={
-  full:{i:'💪',n:'Потужний',d:'Сучасний телефон середнього чи вищого класу (наприклад Poco X5 Pro, Galaxy A54, iPhone 11 і новіші) або компʼютер. Качає <b>повний Stockfish (~80 МБ)</b>: сильніший.'},
-  lite:{i:'📱',n:'Звичайний або слабкий',d:'Бюджетний чи старий телефон (2–3 ГБ памʼяті, наприклад iPhone 8). Качає <b>легкий Stockfish (7 МБ)</b>: швидкий і стабільний.'}};
+  full:{i:'💪',n:'Потужний',d:'Сучасний телефон середнього чи вищого класу (наприклад Poco X5 Pro, Galaxy A54, iPhone 11 і новіші) або компʼютер. Качає <b>повний Stockfish (~100 МБ)</b>: сильніший.'},
+  lite:{i:'📱',n:'Звичайний або слабкий',d:'Бюджетний чи старий телефон (2–3 ГБ памʼяті, наприклад iPhone 8). Качає <b>легкий Stockfish (2 МБ)</b>: швидкий і стабільний.'}};
 function setDevice(choice){
   const was=S.autoFull===true;
   S.devChoice=choice;S.autoFull=choice==='full';S.autoEng={v:AUTO_V,res:choice,why:'ти вибрав сам',at:Date.now(),manual:true};save();
@@ -844,7 +847,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='1.9.3';
+const APP_VERSION='2.0.0';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -3250,8 +3253,8 @@ function viewSettings(){
     <div class="card"><div class="row" style="justify-content:space-between;gap:12px"><div><h4 style="margin:0">🌪 Шахи-Буря</h4><div class="small mut" style="margin-top:4px">Режим, де погода змінює партію. За замовчуванням вимкнено: увімкни, і в меню зʼявиться таємнича вкладка.</div></div>${sw('setStorm',S.stormOn===true)}</div></div>
     <div class="card" id="autoEngBox"><h4 style="margin:0">🧠 Stockfish на цьому пристрої</h4><div class="small mut" style="margin-top:6px">${(()=>{const A=S.autoEng;
       if(engineMode()!=='auto')return'Вибрано вручну в меню «Хто думає».';
-      if(!A||A.res==='checking'||!A.v)return AUTOCHK?'⏳ Зараз перевіряю пристрій у фоні…':'Спочатку працює легкий Stockfish (7 МБ). Трохи згодом тренер сам перевірить, чи потягне пристрій повний (~80 МБ).';
-      return A.res==='full'?`✅ Зараз: повний Stockfish (~80 МБ), ${esc(A.why||'')}.`:`Зараз: легкий Stockfish (7 МБ), ${esc(A.why||'')}.`})()}</div>
+      if(!A||A.res==='checking'||!A.v)return AUTOCHK?'⏳ Зараз перевіряю пристрій у фоні…':'Спочатку працює легкий Stockfish (2 МБ). Трохи згодом тренер сам перевірить, чи потягне пристрій повний (~80 МБ).';
+      return A.res==='full'?`✅ Зараз: повний Stockfish (~100 МБ), ${esc(A.why||'')}.`:`Зараз: легкий Stockfish (2 МБ), ${esc(A.why||'')}.`})()}</div>
       ${engineMode()==='auto'?`<div class="row" style="gap:10px;margin-top:10px">${Object.entries(DEVOPT).map(([k,o])=>`<button class="thOpt" data-devset="${k}" style="text-align:left;font-weight:600;${(S.autoFull===true?'full':'lite')===k?'border-color:var(--green)':''}"><b>${o.i} ${o.n}</b>${(S.autoFull===true?'full':'lite')===k?' ✓':''}<div class="small mut" style="margin-top:4px;font-weight:400">${o.d}</div></button>`).join('')}</div>
       <button class="btn g sm" id="autoEngRe" style="margin-top:8px" ${AUTOCHK?'disabled':''}>🔄 Не знаю: перевір пристрій сам</button>`:''}</div>
     <div class="card"><div class="row" style="justify-content:space-between;gap:12px"><div><h4 style="margin:0">🔊 Звук</h4><div class="small mut" style="margin-top:4px">Звуки ходів, підказок і подій.</div></div>${sw('setSnd',S.sound!==false)}</div></div>
@@ -3387,10 +3390,11 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '2.0.0':['🧠 Stockfish оновлено з 17.1 до 19: найновіша версія для браузера. Легка тепер важить лише 2 МБ, повна ~100 МБ. Старі файли 17.1 видаляються з пристрою самі'],
   '1.9.3':['🛠 Питання «Твій пристрій потужний?» більше не повторюється: зберігається з першого разу, а на компʼютері його взагалі не буде (компʼютер перевіряється сам)'],
   '1.9.2':['🛠 Виправлено розфарбовку дошки: кутова клітинка a1 тепер темна, і ферзь стоїть на своєму кольорі (зелена й деревʼяна дошка)'],
-  '1.9.1':['📱 При першому вході сайт питає, чи потужний твій пристрій: потужний отримує повний Stockfish (~80 МБ), звичайний легкий (7 МБ). Змінити можна в Налаштуваннях'],
-  '1.9.0':['🧠 Спочатку працює легкий Stockfish (7 МБ), а у фоні тренер перевіряє пристрій. Якщо він потужний, тихо качає повний (~80 МБ) і пропонує перезавантажити сайт, щоб думати ним. Статус є в Налаштуваннях'],
+  '1.9.1':['📱 При першому вході сайт питає, чи потужний твій пристрій: потужний отримує повний Stockfish (~100 МБ), звичайний легкий (7 МБ). Змінити можна в Налаштуваннях'],
+  '1.9.0':['🧠 Спочатку працює легкий Stockfish (2 МБ), а у фоні тренер перевіряє пристрій. Якщо він потужний, тихо качає повний (~80 МБ) і пропонує перезавантажити сайт, щоб думати ним. Статус є в Налаштуваннях'],
   '1.8.2':['🛠 Stockfish більше не «завантажується» заново при кожному вході: якщо він уже збережений на пристрої, сайт бере його з памʼяті одразу'],
   '1.8.1':['⚙️ Шахи-Буря тепер вимкнена за замовчуванням: вкладка зʼявляється тільки якщо увімкнути її в Налаштуваннях'],
   '1.8.0':['🎨 Усі емодзі на сайті замінено на власні іконки, намальовані кодом: однаково гарно виглядають на будь-якому телефоні й компʼютері'],
