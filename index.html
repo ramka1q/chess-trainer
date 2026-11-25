@@ -198,6 +198,7 @@ button{font-family:inherit}
     <a data-v="home" class="on"><span class="ic">🏠</span>Шлях</a>
     <a data-v="mygames"><span class="ic">🔍</span>Мої партії</a>
     <a data-v="play"><span class="ic">⚔️</span>Гра</a>
+    <a data-v="storm"><span class="ic">🌪</span>Шахи-Буря</a>
     <a data-v="puzzles"><span class="ic">🧩</span>Задачі</a>
     <a data-v="openings"><span class="ic">📖</span>Дебюти</a>
     <a data-v="vision"><span class="ic">👁</span>Бачення</a>
@@ -237,6 +238,7 @@ button{font-family:inherit}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="pieces.js"></script>
 <script src="masters.js"></script>
+<script src="storm.js" defer></script>
 <script>
 "use strict";
 /* ================= UTIL ================= */
@@ -698,7 +700,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='1.2.0';
+const APP_VERSION='1.3.0';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -3033,7 +3035,7 @@ function showView(v){
   if(v==='coach'){showHome();viewHome();startCoachSession();return}
   if(v==='home'||v==='stats'||v==='review'||v==='mygames'){showHome();({home:viewHome,stats:viewStats,review:viewReview,mygames:viewMyGames})[v]();return}
   showMain();
-  ({play:viewPlay,puzzles:viewPuzzles,openings:viewOpenings,vision:viewVision,endgames:viewEndgames,think:viewThink,calc:viewCalc,rush:viewRush,strategy:viewStrategy,masters:viewMasters,test:viewTest})[v]();
+  ({play:viewPlay,storm:()=>window.viewStorm(),puzzles:viewPuzzles,openings:viewOpenings,vision:viewVision,endgames:viewEndgames,think:viewThink,calc:viewCalc,rush:viewRush,strategy:viewStrategy,masters:viewMasters,test:viewTest})[v]();
 }
 
 function viewHome(){
@@ -3208,6 +3210,9 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '1.3.0':['🌪 Новий режим «Шахи-Буря»: грай з ботом або з другом, а раз на кілька ходів змінюється погода',
+           '🎬 Під час події дошка оживає в 3D: фігури встають, камера дивиться у вікно, а там торнадо, блискавка, НЛО, метеорит…',
+           '📻 Перед кожною партією прогноз погоди, а за хід до події з’являється прикмета'],
   '1.2.0':['🚀 Повний Stockfish у браузері тепер рахує на кількох ядрах процесора (якщо браузер це підтримує)',
            '👁 «Бачення»: якщо фігура зв’язана, тренер показує це стрілками (хто зв’язує і з яким королем)',
            '🛠 Виправлено запуск на ПК: більше немає дивних помилок у чорному вікні'],
