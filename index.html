@@ -57,6 +57,17 @@ button{font-family:inherit}
 #board{--bs:min(calc(100vh - 120px),calc(100vw - 160px - 420px - 90px));width:var(--bs);height:var(--bs);position:relative;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);user-select:none;touch-action:none;border-radius:3px;overflow:hidden}
 .sq{position:relative;display:flex;align-items:center;justify-content:center}
 .sq.l{background:var(--light)} .sq.d{background:var(--dark)}
+/* wooden board theme: every square shows a different part of a generated wood-grain picture */
+body.wood{--light:#E6C79A;--dark:#AD7A4F;--hl-l:#D4CE6C;--hl-d:#ACA647}
+body.wood .sq{background-size:300% 300%;background-position:var(--wo)}
+body.wood .sq.l{background-color:var(--light);background-image:var(--woodL)}
+body.wood .sq.d{background-color:var(--dark);background-image:var(--woodD)}
+body.wood .sq.l.hl{background-image:linear-gradient(rgba(190,205,60,.5),rgba(190,205,60,.5)),var(--woodL)}
+body.wood .sq.d.hl{background-image:linear-gradient(rgba(170,190,40,.5),rgba(170,190,40,.5)),var(--woodD)}
+.thOpt{flex:1;max-width:170px;background:#2b2926;border:3px solid #3c3a37;border-radius:12px;padding:10px;cursor:pointer;color:#fff;font-weight:700}
+.thOpt:hover{border-color:var(--green)}
+.thOpt .pv{display:grid;grid-template-columns:repeat(4,1fr);aspect-ratio:1;border-radius:6px;overflow:hidden;margin-bottom:8px}
+.thOpt .pv i{display:block;background-size:300% 300%}
 .sq.l.hl{background:var(--hl-l)} .sq.d.hl{background:var(--hl-d)}
 .sq .qm{position:absolute;top:1%;left:32%;width:36%;height:36%;border-radius:50%;z-index:6;display:flex;align-items:center;justify-content:center;font-weight:900;color:#fff;font-size:calc(var(--bs)/34);cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.45),0 0 0 2px #fff;animation:qmPulse 1.6s ease-in-out infinite}
 .sq .qm.good{background:#81B64C} .sq .qm.miss{background:#e0a800} .sq .qm.bad{background:#FA412D}
@@ -226,6 +237,7 @@ button{font-family:inherit}
     <a data-v="review"><span class="ic">🔁</span>Повторення <span id="dueBadge" class="tag" style="background:var(--red);color:#fff"></span></a>
     <a data-v="stats"><span class="ic">📊</span>Прогрес</a>
     <div class="me"><div id="meRank"></div><div class="xpbar"><i id="meXp"></i></div><div id="meXpT" class="small" style="margin-top:4px"></div><div id="meElo" class="small" style="margin-top:8px;cursor:pointer" title="Змінити ело"></div><div style="margin-top:8px"><label class="small"><input type="checkbox" id="sndChk" checked> Звук</label></div>
+      <div style="margin-top:8px" class="small">🎨 Дошка:<select id="thSel" style="width:100%;margin-top:3px;background:#1f1e1b;color:#fff;border:1px solid #3c3a37;border-radius:4px;padding:3px"><option value="green">🟩 Зелена</option><option value="wood">🪵 Деревʼяна</option></select></div>
       <div style="margin-top:8px" class="small">🧠 Хто думає:<select id="engSel" style="width:100%;margin-top:3px;background:#1f1e1b;color:#fff;border:1px solid #3c3a37;border-radius:4px;padding:3px"><option value="auto">Авто (найкраще доступне)</option><option value="native">💻 Процесор комп’ютера</option><option value="browser">🌐 Браузер, швидкий (7 МБ)</option><option value="full">🌐 Браузер, повний (80 МБ, сильніший, багатоядерний)</option></select>
       <button id="syBtn" class="btn g sm" style="margin-top:8px;width:100%">🔄 Синхронізація</button>
       <a id="pcDl" class="btn g sm" style="display:none;margin-top:8px;text-align:center;text-decoration:none" href="https://github.com/ramka1q/chess-trainer/releases/latest/download/chess-trainer-pc.zip">⬇ Скачати для ПК (Stockfish 19)</a><div id="engName" class="dim" style="margin-top:3px;font-size:11px"></div></div></div>
@@ -252,7 +264,7 @@ button{font-family:inherit}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="pieces.js"></script>
 <script src="masters.js"></script>
-<script src="storm.js?v=1.6.4" defer></script>
+<script src="storm.js?v=1.7.0" defer></script>
 <script>
 "use strict";
 /* ================= UTIL ================= */
@@ -396,13 +408,50 @@ function wc(cp){return 2/(1+Math.exp(-0.00368208*cp))-1}
 function cpText(cp){if(Math.abs(cp)>=9000){const n=Math.round((10000-Math.abs(cp))/10);return (cp>0?'':'-')+'M'+n}return (cp>0?'+':'')+(cp/100).toFixed(1)}
 
 /* ================= BOARD ================= */
+/* ================= BOARD THEME ================= */
+const WOOD_POS=i=>`${(i*37+11)%100}% ${(i*61+23)%100}%`;
+const WOOD={};
+function woodTile(base,dark,seed){
+  const c=document.createElement('canvas');c.width=c.height=240;const x=c.getContext('2d');
+  let r=seed;const R=()=>(r=(r*9301+49297)%233280)/233280;
+  x.fillStyle=base;x.fillRect(0,0,240,240);
+  /* long wavy grain lines */
+  for(let k=0;k<70;k++){const y0=R()*260-10,amp=1+R()*4,fr=.008+R()*.02,ph=R()*6.3;x.strokeStyle=`rgba(${dark},${.05+R()*.16})`;x.lineWidth=.6+R()*2.2;x.beginPath();
+    for(let px=0;px<=240;px+=6){const py=y0+Math.sin(px*fr+ph)*amp+Math.sin(px*fr*3.1+ph)*amp*.3;px?x.lineTo(px,py):x.moveTo(px,py)}x.stroke()}
+  /* soft light streaks */
+  for(let k=0;k<14;k++){const y0=R()*240;x.fillStyle=`rgba(255,240,215,${.04+R()*.06})`;x.fillRect(0,y0,240,2+R()*6)}
+  /* fine noise */
+  const im=x.getImageData(0,0,240,240),d=im.data;for(let i=0;i<d.length;i+=4){const n=(R()-.5)*14;d[i]+=n;d[i+1]+=n;d[i+2]+=n}x.putImageData(im,0,0);
+  return c;
+}
+function ensureWood(){
+  if(WOOD.l)return;
+  WOOD.l=woodTile('#E6C79A','150,100,55',7);WOOD.d=woodTile('#AD7A4F','80,45,20',19);
+  const st=document.documentElement.style;st.setProperty('--woodL',`url(${WOOD.l.toDataURL('image/jpeg',.86)})`);st.setProperty('--woodD',`url(${WOOD.d.toDataURL('image/jpeg',.86)})`);
+}
+window.WOOD=WOOD;window.WOOD_POS=WOOD_POS;
+function applyTheme(t){if(t==='wood')ensureWood();document.body.classList.toggle('wood',t==='wood');const sel=document.querySelector('#thSel');if(sel)sel.value=t||'green'}
+function themePreview(t){
+  if(t==='wood')ensureWood();
+  let h='';for(let i=0;i<16;i++){const r=Math.floor(i/4),c=i%4,light=(r+c)%2===0;
+    h+=t==='wood'?`<i style="background-color:${light?'#E6C79A':'#AD7A4F'};background-image:var(${light?'--woodL':'--woodD'});background-position:${WOOD_POS(i*3)}"></i>`:`<i style="background:${light?'#EBECD0':'#739552'}"></i>`}
+  return `<div class="pv">${h}</div>`;
+}
+function askBoard(next){
+  modal(`<h2>🎨 Яку дошку обираєш?</h2><p class="small mut">Потім можна змінити в налаштуваннях.</p>
+    <div class="row" style="gap:12px;justify-content:center;margin-top:10px">
+      <button class="thOpt" data-th="green">${themePreview('green')}🟩 Зелена</button>
+      <button class="thOpt" data-th="wood">${themePreview('wood')}🪵 Деревʼяна</button></div>`);
+  document.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>{S.boardTheme=b.dataset.th;save();applyTheme(S.boardTheme);snd('good');closeModal();next&&next()});
+}
+
 class Board{
   constructor(el){
     this.el=el;this.flip=false;this.g=new Chess();this.sel=null;this.last=null;this.marks={};this.arrows=[];this.badge=null;
     this.canMove=()=>false;this.onMove=null;this.onClick=null;this.drag=null;this.showDots=true;
     this.uArrows=[];this.uMarks={};this.rdrag=null;this.posKey='';
     el.innerHTML='';this.sqs={};
-    for(let i=0;i<64;i++){const d=document.createElement('div');d.className='sq';el.appendChild(d);this.sqs[i]=d}
+    for(let i=0;i<64;i++){const d=document.createElement('div');d.className='sq';d.style.setProperty('--wo',WOOD_POS(i));el.appendChild(d);this.sqs[i]=d}
     this.svg=document.createElementNS('http://www.w3.org/2000/svg','svg');this.svg.id='arrows';this.svg.setAttribute('viewBox','0 0 8 8');el.appendChild(this.svg);
     this.promoEl=document.createElement('div');this.promoEl.id='promo';el.appendChild(this.promoEl);
     el.addEventListener('pointerdown',e=>this.down(e));
@@ -715,7 +764,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='1.6.4';
+const APP_VERSION='1.7.0';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -752,6 +801,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostnam
   if(!self.crossOriginIsolated&&!navigator.serviceWorker.controller&&!sessionStorage.getItem('coiReload')){sessionStorage.setItem('coiReload','1');navigator.serviceWorker.ready.then(()=>location.reload())}
 }).catch(()=>{});
 $('#sndChk').onchange=e=>{S.sound=e.target.checked;save()};
+$('#thSel').onchange=e=>{S.boardTheme=e.target.value;save();applyTheme(S.boardTheme)};
 const ACH={
   first:{i:'🧩',n:'Перша задача',d:'Розв’яжи першу задачу'},
   streak10:{i:'🔥',n:'Серія 10',d:'10 задач поспіль без помилок'},
@@ -3232,6 +3282,7 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '1.7.0':['🪵 Нова деревʼяна дошка! При першому вході можна вибрати зелену або деревʼяну, а потім змінити в налаштуваннях (🎨 Дошка)'],
   '1.6.4':['❔ Знак «?» тепер стоїть зверху над фігурою, а пояснення програється тільки коли на нього натиснеш'],
   '1.6.3':['📱 Шахи-Буря швидше працює на телефонах: легша 3D-сцена, менше частинок, корона крутиться економніше, туман без важкого розмиття'],
   '1.6.2':['❔ У вправах «Бери безкоштовне» і «Що під ударом» після перевірки над фігурами зʼявляється знак «?». Натисни, і тренер покаже чому',
@@ -3275,7 +3326,9 @@ function showWhatsNew(){
   if(!vers.length)return;
   modal(`<div style="font-size:50px">🆕</div><h2>Що нового</h2>${vers.map(v=>`<div class="card" style="text-align:left"><b>Версія ${v}</b><ul style="margin:6px 0 0;padding-left:18px">${CHANGELOG[v].map(x=>`<li style="margin:4px 0">${x}</li>`).join('')}</ul></div>`).join('')}<button class="btn" onclick="closeModal()" style="width:100%">Круто!</button>`);
 }
-if(!S.elo)setTimeout(()=>askElo(true),300);else setTimeout(showWhatsNew,700);
+applyTheme(S.boardTheme||'green');
+{const afterTheme=()=>{if(!S.elo)setTimeout(()=>askElo(true),300);else setTimeout(showWhatsNew,700)};
+ if(!S.boardTheme)setTimeout(()=>askBoard(afterTheme),300);else afterTheme();}
 </script>
 </body>
 </html>

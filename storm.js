@@ -284,7 +284,13 @@ const isLight=sq=>((sq.charCodeAt(0)-97)+(+sq[1]))%2===1;
 function drawBoard(info){
   const c=W3.bcv,x=c.getContext('2d'),S=c.width,q=S/8;const cs=getComputedStyle(document.documentElement);const V=n=>cs.getPropertyValue(n).trim();
   const L=V('--light')||'#EBECD0',D=V('--dark')||'#739552',HL=V('--hl-l')||'#F5F682',HD=V('--hl-d')||'#B9CA43';
-  for(let r=0;r<8;r++)for(let f=0;f<8;f++){const sq=W3.flip?sqN(7-f,r):sqN(f,7-r);const light=isLight(sq);const hl=info.last&&info.last.includes(sq);x.fillStyle=light?(hl?HL:L):(hl?HD:D);x.fillRect(f*q,r*q,q,q)}
+  const wood=document.body.classList.contains('wood')&&window.WOOD&&WOOD.l;
+  for(let r=0;r<8;r++)for(let f=0;f<8;f++){const sq=W3.flip?sqN(7-f,r):sqN(f,7-r);const light=isLight(sq);const hl=info.last&&info.last.includes(sq);
+    if(wood){/* same piece of the wood picture as the 2D square (background 300%, position --wo) */
+      const tile=light?WOOD.l:WOOD.d,tw=tile.width,k=tw/(3*q);const pp=WOOD_POS(r*8+f).match(/[\d.]+/g).map(Number);
+      x.drawImage(tile,2*q*pp[0]/100*k,2*q*pp[1]/100*k,q*k,q*k,f*q,r*q,q,q);
+      if(hl){x.fillStyle=light?'rgba(190,205,60,.5)':'rgba(170,190,40,.5)';x.fillRect(f*q,r*q,q,q)}}
+    else{x.fillStyle=light?(hl?HL:L):(hl?HD:D);x.fillRect(f*q,r*q,q,q)}}
   x.font=`700 ${S/46}px "Segoe UI",system-ui,Arial,sans-serif`;
   for(let i=0;i<8;i++){
     const rk=W3.flip?i+1:8-i;const sqL=W3.flip?sqN(7,i):sqN(0,7-i);const lt=isLight(sqL);x.fillStyle=lt?D:L;x.textAlign='left';x.textBaseline='top';x.fillText(String(rk),q*.04,i*q+q*.03);
