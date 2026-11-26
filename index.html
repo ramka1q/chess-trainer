@@ -271,8 +271,8 @@ body.wood .sq.d.hl{background-image:linear-gradient(rgba(170,190,40,.5),rgba(170
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="pieces.js"></script>
 <script src="masters.js"></script>
-<script src="storm.js?v=2.1.1" defer></script>
-<script src="icons.js?v=2.1.1" defer></script>
+<script src="storm.js?v=2.1.2" defer></script>
+<script src="icons.js?v=2.1.2" defer></script>
 <script>
 "use strict";
 /* ================= UTIL ================= */
@@ -857,7 +857,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='2.1.1';
+const APP_VERSION='2.1.2';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -2116,7 +2116,7 @@ function startLesson(id,isReview,onDone){
   const L=LESSONS[id];if(!L)return;
   if(!isReview&&!unlocked(id)){toast('🔒 Спершу пройди попередній урок');return}
   showMain();stopCur();setNav(onDone?'coach':isReview?'review':'home');
-  const st=lessonState(id);const req=REQ(L);
+  let st=lessonState(id);const req=REQ(L);
   const top=()=>sessTop()+`<div class="card"><div class="row" style="justify-content:space-between"><div><div class="small mut">${isReview?'🔁 Повторення':esc(COURSE[L.unit].u)}</div><b style="font-size:16px">${L.i} ${esc(L.title)}</b></div>
     ${isReview?'':`<div class="stars">${Array.from({length:req},(_,i)=>`<span class="s ${i<st.stars?'on':''}">★</span>`).join('')}</div>`}</div>
     ${isReview?'':`<div class="small mut" style="margin-top:4px">${req>1?`Пройди <b>${req} рази поспіль ідеально</b>, щоб відкрити наступний урок. Помилка обнуляє серію.`:'Перемога з не більше ніж 1 грубою помилкою відкриває наступний розділ.'}</div>`}</div>`;
@@ -2124,6 +2124,7 @@ function startLesson(id,isReview,onDone){
   $('#backBtn').onclick=()=>showView(onDone?'home':isReview?'review':'home');
   function runEnd(perfect){
     stopCur();
+    st=lessonState(id); /* always the record that is really saved (sync may have replaced it) */
     st.runs++;
     if(isReview){scheduleSRS(id,perfect);addXP(perfect?30:5,'повторення');
       if(onDone){sessModal(perfect,perfect?'Повторення успішне!':'Була помилка, тож урок повернеться завтра.',onDone);return}
@@ -2140,7 +2141,7 @@ function startLesson(id,isReview,onDone){
       const nx=ORDER[ORDER.indexOf(id)+1];
       modal(`<div style="font-size:64px">${L.t==='boss'?'👑':'🌟'}</div><h2>${L.t==='boss'?'Боса переможено!':'Урок пройдено!'}</h2><div class="stars" style="justify-content:center">${'<span class="s on">★</span>'.repeat(req)}</div><p class="mut">${esc(L.title)}: опановано. Урок додано в систему повторення, тож він повернеться через 3 дні, щоб закріпитися в довгостроковій пам’яті.</p>
         <div class="row">${nx?`<button class="btn" id="mNext">Наступний урок ➜</button>`:''}<button class="btn g" id="mHome">До шляху</button></div>`);
-      if($('#mNext'))$('#mNext').onclick=()=>{closeModal();startLesson(nx)};$('#mHome').onclick=()=>{closeModal();showView('home')};
+      if($('#mNext'))$('#mNext').onclick=()=>{closeModal();startLesson(nx)};$('#mHome').onclick=()=>{closeModal();showView('home')};lockEndModal();
       return;
     }
     if(onDone){sessModal(perfect,perfect?`Ідеально! ★ ${st.stars}/${req}. ${req-st.stars>0?`Ще ${req-st.stars} поспіль, і урок пройдено (продовжимо в наступних заняттях).`:''}`:'Була помилка, тож серія обнулилася. Повернемось до цього уроку на наступному занятті.',onDone);return}
@@ -2150,7 +2151,7 @@ function startLesson(id,isReview,onDone){
   function showResult(ok,msg,onHome,onAgain){
     if(ok){snd('good');}
     modal(`<div style="font-size:54px">${ok?'⭐':'🔁'}</div><h2>${ok?'Ідеально!':'Майже!'}</h2>${isReview?'':`<div class="stars" style="justify-content:center;margin-bottom:8px">${Array.from({length:REQ(L)},(_,i)=>`<span class="s ${i<st.stars?'on':''}">★</span>`).join('')}</div>`}<p class="mut">${msg}</p><div class="row"><button class="btn" id="mAgain">${ok?'Далі ➜':'Ще раз ↺'}</button><button class="btn g" id="mHome">Вийти</button></div>`);
-    $('#mAgain').onclick=()=>{closeModal();onAgain()};$('#mHome').onclick=()=>{closeModal();onHome()};
+    $('#mAgain').onclick=()=>{closeModal();onAgain()};$('#mHome').onclick=()=>{closeModal();onHome()};lockEndModal();
   }
   function run(){
     stopCur();
@@ -2202,7 +2203,14 @@ function sessTop(){
 function sessModal(ok,msg,next){
   if(ok)snd('good');
   modal(`<div style="font-size:50px">${ok?'⭐':'🔁'}</div><h2>${ok?'Чудово!':'Нічого, рухаємось далі'}</h2><p class="mut">${msg}</p><div class="row"><button class="btn" id="sNext">Далі за планом ➜</button><button class="btn g" id="sExit">Вийти</button></div>`);
-  $('#sNext').onclick=()=>{closeModal();next()};$('#sExit').onclick=()=>{closeModal();SESSION=null;showView('home')};
+  $('#sNext').onclick=()=>{closeModal();next()};$('#sExit').onclick=()=>{closeModal();SESSION=null;showView('home')};lockEndModal();
+}
+/* end-of-lesson windows: a tap outside does not close them, and if they get closed anyway,
+   the button under the board brings them back (it used to do nothing) */
+function lockEndModal(){
+  MODAL_STICKY=true;const box=$('#modalBox');const html=box.innerHTML;const btns=[...box.querySelectorAll('button[id]')].map(b=>[b.id,b.onclick]);
+  $('#pf').innerHTML='<button class="btn" id="reopenEnd">🏁 Показати результат</button>';$('#pf').style.display='flex';
+  $('#reopenEnd').onclick=()=>{modal(html);btns.forEach(([id,f])=>{const b=document.getElementById(id);if(b)b.onclick=f});MODAL_STICKY=true};
 }
 function startCoachSession(){
   stopCur();const steps=planSession();
@@ -3069,7 +3077,10 @@ async function syncNow(manual){
     const before=JSON.stringify(packState());
     const local={};for(const k in S)local[k]=S[k];
     const merged=remote?mergeState(local,remote):local;
-    for(const k in merged)if(!LOCAL_ONLY.includes(k))S[k]=merged[k];
+    /* lessons are updated in place: a running lesson keeps a reference to its record */
+    for(const k in merged){if(LOCAL_ONLY.includes(k))continue;
+      if(k==='lessons'&&S.lessons&&merged.lessons){for(const id in merged.lessons){if(S.lessons[id])Object.assign(S.lessons[id],merged.lessons[id]);else S.lessons[id]=merged.lessons[id]}}
+      else S[k]=merged[k]}
     const changed=JSON.stringify(packState())!==before;
     syncQuiet=true;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}syncQuiet=false;
     const body=JSON.stringify({files:{[SYNC_FILE]:{content:JSON.stringify(packState())}}});
@@ -3409,6 +3420,7 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '2.1.2':['🛠 Пройдений урок більше не «зникає» з увімкненою синхронізацією','🛠 Вікно «Урок пройдено» не закривається кліком повз нього, а якщо закрилось, кнопка під дошкою відкриває його знову'],
   '2.1.1':['🔗 У поясненні розмінів тренер тепер показує звʼязані фігури: наприклад, ферзь «бʼє» клітинку, але забрати не може, бо звʼязаний з королем'],
   '2.1.0':['💻 Сайт може думати Stockfish 19 з ПК-версії, один в один як через .cmd: запусти «Запустити шахи.cmd» і увімкни в Налаштуваннях «Рахувати через ПК-версію»'],
   '2.0.1':['💻 На компʼютері одразу працює повний Stockfish 19, без перевірок і без вікна з перезавантаженням'],
