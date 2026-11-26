@@ -8,33 +8,37 @@
    window.playLegend({id,color,piece,kingColor,fen,kingSq,checkers,seek?,speed?}) -> Promise */
 (function(){
 'use strict';
-const VER='2.4.0';
+const VER='2.5.0';
 const LOWL=(window.matchMedia&&matchMedia('(pointer:coarse)').matches)||innerWidth<760||(navigator.hardwareConcurrency||8)<=4;
 const Q=n=>Math.max(1,Math.round(n*(LOWL?.45:1)));
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const LIST=[
-  {id:'jurassic',n:'Юрський мат',i:'🦖',hint:'Спертий мат: кінь матує короля, якого замурували його власні фігури.'},
-  {id:'rocket',n:'Політ на планету',i:'🚀',hint:'Мат пішаком або перетворенням пішака.'},
-  {id:'volcano',n:'Виверження',i:'🌋',hint:'Мат подвійним шахом.'},
-  {id:'ghosts',n:'Армія полеглих',i:'👻',hint:'Мат, коли в тебе на 5+ очок менше матеріалу, ніж у суперника (після жертв).'},
-  {id:'studio',n:'Четверта стіна',i:'🎬',hint:'Мат рокіровкою, взяттям на проході, ходом короля або перетворенням не у ферзя.'},
+  {id:'jurassic',n:'Юрський мат',i:'🦖',hint:'Мат конем, коли короля з половини боків затисли його власні фігури (спертий мат теж рахується).'},
+  {id:'rocket',n:'Політ на планету',i:'🚀',hint:'Мат пішаком або мат тільки-но перетвореним пішаком.'},
+  {id:'volcano',n:'Виверження',i:'🌋',hint:'Мат подвійним шахом або відкритим шахом (ходить одна фігура, а шах дає інша).'},
+  {id:'ghosts',n:'Армія полеглих',i:'👻',hint:'Мат, коли в тебе на 4+ очки менше матеріалу, ніж у суперника (після жертв).'},
+  {id:'studio',n:'Четверта стіна',i:'🎬',hint:'Мат рокіровкою, взяттям на проході, ходом короля, перетворенням не у ферзя, або коли в тебе лишились тільки король і одна фігура.'},
 ];
 window.LEGENDS=LIST;
 
 /* ---------------- which (if any) legendary film this mate earns ---------------- */
 const VAL={p:1,n:3,b:3,r:5,q:9,k:0};
 function material(g,c){return g.board().flat().filter(x=>x&&x.color===c).reduce((a,x)=>a+VAL[x.type],0)}
-function smothered(g,king){const side=g.turn(),f=king.charCodeAt(0)-97,r=+king[1];
-  for(let df=-1;df<=1;df++)for(let dr=-1;dr<=1;dr++){if(!df&&!dr)continue;const ff=f+df,rr=r+dr;if(ff<0||ff>7||rr<1||rr>8)continue;const p=g.get(String.fromCharCode(97+ff)+rr);if(!p||p.color!==side)return false}
-  return true}
+/* how boxed-in the king is by its own pieces: share of its neighbour squares (on the board) taken by them */
+function boxed(g,king){const side=g.turn(),f=king.charCodeAt(0)-97,r=+king[1];let own=0,all=0;
+  for(let df=-1;df<=1;df++)for(let dr=-1;dr<=1;dr++){if(!df&&!dr)continue;const ff=f+df,rr=r+dr;if(ff<0||ff>7||rr<1||rr>8)continue;all++;const p=g.get(String.fromCharCode(97+ff)+rr);if(p&&p.color===side)own++}
+  return all?own/all:0}
 window.legendFor=function({g,mv,king,checkers}){
   try{
     const fl=mv.flags||'';
     if(fl.includes('k')||fl.includes('q')||fl.includes('e')||mv.piece==='k'||(mv.promotion&&mv.promotion!=='q'))return 'studio';
-    if(checkers.length>1)return 'volcano';
-    if(checkers.length===1&&checkers[0].type==='n'&&smothered(g,king))return 'jurassic';
+    const disc=checkers.length===1&&checkers[0].sq&&checkers[0].sq!==mv.to;
+    if(checkers.length>1||disc)return 'volcano';
+    if(checkers.length===1&&checkers[0].type==='n'&&boxed(g,king)>=.5)return 'jurassic';
     if(fl.includes('p')||checkers.some(c=>c.type==='p'))return 'rocket';
-    if(material(g,mv.color)<=material(g,g.turn())-5)return 'ghosts';
+    if(material(g,mv.color)<=material(g,g.turn())-4)return 'ghosts';
+    /* the one-man show: only the king and a single piece left (pawns don't count as a piece here) */
+    {const mine=g.board().flat().filter(x=>x&&x.color===mv.color&&x.type!=='k');if(mine.length===1&&mine[0].type!=='p')return 'studio'}
   }catch(e){console.warn(e)}
   return null;
 };
@@ -415,19 +419,53 @@ studio:{veil:'#000',
     burn.remove();ring.remove();strips.forEach(s=>s.remove());M&&M.stop()}},
 };
 
+/* ================= dialogue: Ukrainian voice-over + subtitles ================= */
+let DIALOG=null;
+function loadDialog(){if(DIALOG)return Promise.resolve(DIALOG);return fetch(`legend/dialog.json?v=${VER}`).then(r=>r.json()).then(d=>DIALOG=d).catch(()=>null)}
+function talk(C,id){
+  const d=DIALOG&&DIALOG.films[id];if(!d)return;const V=DIALOG.voices;const lines=d.lines.map((l,i)=>({t:l[0],who:l[1],text:l[2],i}));
+  const sub=document.createElement('div');sub.style.cssText='position:fixed;left:50%;bottom:6vh;transform:translateX(-50%);z-index:989;max-width:min(860px,88vw);text-align:center;pointer-events:none;font:600 clamp(15px,2.3vw,24px)/1.35 system-ui,sans-serif;color:#fff;text-shadow:0 2px 4px #000,0 0 12px #000;opacity:0;transition:opacity .2s';document.body.appendChild(sub);
+  let cur=null,busyUntil=0,idx=0;const seek=C.I.seek||0;while(idx<lines.length&&lines[idx].t<seek-.2)idx++;
+  const ukVoice=(()=>{try{return speechSynthesis.getVoices().find(v=>/^uk/i.test(v.lang))||null}catch(e){return null}})();
+  const show=(l,ms)=>{const v=V[l.who]||{};sub.innerHTML=`<span style="color:${v.col||'#ffd54f'}">${d.names[l.who]||''}:</span> ${l.text}`;sub.style.opacity=1;clearTimeout(sub._t);sub._t=setTimeout(()=>{sub.style.opacity=0},ms)};
+  const fallback=l=>{const ms=Math.max(1600,l.text.length*65);show(l,ms);busyUntil=performance.now()+ms;
+    if(ukVoice&&!(typeof S!=='undefined'&&S.sound===false)){try{const u=new SpeechSynthesisUtterance(l.text);u.voice=ukVoice;u.lang=ukVoice.lang;const v=V[l.who]||{};u.pitch=/-1\dHz/.test(v.pitch)?.7:/\+[2-4]\dHz/.test(v.pitch)?1.4:1;u.rate=1.05;speechSynthesis.speak(u)}catch(e){}}};
+  const say=l=>{if(typeof S!=='undefined'&&S.sound===false){fallback(l);return}
+    const a=new Audio(`legend/voice/${id}/${l.i}.mp3?v=${VER}`);a.volume=1;cur=a;busyUntil=performance.now()+8000;
+    try{voiceFx(a,(d.fx&&d.fx[l.who])||(V[l.who]||{}).fx||'none')}catch(e){}
+    a.onloadedmetadata=()=>{const ms=a.duration*1000+250;show(l,ms);busyUntil=performance.now()+ms;C.M&&C.M.duck&&C.M.duck(true)};
+    a.onended=()=>{busyUntil=0;C.M&&C.M.duck&&C.M.duck(false)};
+    a.onerror=()=>{if(cur===a){cur=null;fallback(l)}};
+    a.play().catch(()=>{if(cur===a){cur=null;fallback(l)}})};
+  C.every(()=>{const r=C.raw||0;if(idx>=lines.length)return;const l=lines[idx];if(r<l.t)return;
+    if(performance.now()<busyUntil&&r-l.t<2.5)return;idx++;say(l)});
+  /* voice effects: ghosts echo, astronauts talk over the radio, the director uses a megaphone */
+  let AX=null;
+  function voiceFx(a,kind){
+    AX=AX||new (window.AudioContext||window.webkitAudioContext)();if(AX.state==='suspended')AX.resume();
+    const src=AX.createMediaElementSource(a);const out=AX.createGain();out.gain.value=1.15;out.connect(AX.destination);
+    const shaper=amt=>{const w=AX.createWaveShaper();const c=new Float32Array(256);for(let i=0;i<256;i++){const x=i/128-1;c[i]=Math.tanh(x*amt)/Math.tanh(amt)}w.curve=c;return w};
+    if(kind==='ghost'){src.connect(out);const dl=AX.createDelay(1);dl.delayTime.value=.19;const fb=AX.createGain();fb.gain.value=.38;const lp=AX.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2200;const wet=AX.createGain();wet.gain.value=.55;
+      src.connect(dl);dl.connect(lp);lp.connect(fb);fb.connect(dl);lp.connect(wet);wet.connect(out)}
+    else if(kind==='radio'){const hp=AX.createBiquadFilter();hp.type='highpass';hp.frequency.value=450;const lp=AX.createBiquadFilter();lp.type='lowpass';lp.frequency.value=3000;src.connect(hp);hp.connect(shaper(2.2)).connect(lp).connect(out)}
+    else if(kind==='mega'){const bp=AX.createBiquadFilter();bp.type='bandpass';bp.frequency.value=1400;bp.Q.value=.7;src.connect(bp);bp.connect(shaper(3)).connect(out)}
+    else src.connect(out)}
+  C.onEnd(()=>{try{cur&&cur.pause()}catch(e){}try{speechSynthesis.cancel()}catch(e){}sub.remove();try{AX&&AX.close()}catch(e){}});
+}
+
 /* ================= playing a film ================= */
 const SCN=window.LEGEND_SCENES=window.LEGEND_SCENES||{};
 function loadScene(id){if(SCN[id])return Promise.resolve();return new Promise((res,rej)=>{const s=document.createElement('script');s.src=`legend/${id}.js?v=${VER}`;s.onload=()=>SCN[id]?res():rej(new Error('scene '+id));s.onerror=()=>rej(new Error('scene '+id));document.head.appendChild(s)})}
 window.playLegend=async function(I){
   if(!window.CINE)throw new Error('cinema not loaded');
   await (window.THREE?Promise.resolve():window.loadThree());
-  await loadScene(I.id);
+  await loadScene(I.id);await loadDialog();
   const cen=census(I.fen);I.alive=cen.alive;I.dead=cen.dead;
   I.imgs=await loadImgs();I.app=appCanvas(I.fen,I.imgs);
   const tr=TRANS[I.id];let undo=null;
   if(!I.seek)try{undo=await tr.in(I)}catch(e){console.warn('legend in',e)}
   let veil=null;
-  try{veil=await CINE.engine(Object.assign({},I,{veil:tr.veil,veilOut:tr.veil,veilIn:.7,keepVeil:true,onStart:C=>{undo&&undo();undo=null;const B=document.getElementById('board');if(B)B.style.visibility=''}}),C=>SCN[I.id](C,kit(C)))}
+  try{veil=await CINE.engine(Object.assign({},I,{veil:tr.veil,veilOut:tr.veil,veilIn:.7,keepVeil:true,onStart:C=>{undo&&undo();undo=null;const B=document.getElementById('board');if(B)B.style.visibility=''}}),C=>{const r=SCN[I.id](C,kit(C));talk(C,I.id);return r})}
   catch(e){undo&&undo();throw e}
   try{await tr.out(I,veil)}catch(e){console.warn('legend out',e)}
   finally{veil&&veil.remove();const B=document.getElementById('board');if(B)B.style.visibility=''}

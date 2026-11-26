@@ -149,9 +149,11 @@ const EVENTS={
       }
       return null}},
 };
+/* live events (real time, ~10 s, while you keep playing) come from storm-live.js */
+if(window.STORM_LIVE_DEF)try{Object.assign(EVENTS,window.STORM_LIVE_DEF({sqN,fr,FILES,PNAME,PACC,noise,tone}))}catch(e){console.warn('live events',e)}
 const POOL=Object.keys(EVENTS).filter(k=>!EVENTS[k].hidden);
 function wpick(keys){const tot=keys.reduce((a,k)=>a+RAR[EVENTS[k].rar].w,0);let x=Math.random()*tot;for(const k of keys){x-=RAR[EVENTS[k].rar].w;if(x<=0)return k}return keys[keys.length-1]}
-function makeForecast(){const out=[];let left=POOL.slice();while(out.length<4&&left.length){const k=wpick(left);out.push(k);left=left.filter(x=>x!==k)}return out}
+function makeForecast(noLive){const out=[];let left=POOL.filter(k=>!(noLive&&EVENTS[k].live));while(out.length<4&&left.length){const k=wpick(left);out.push(k);left=left.filter(x=>x!==k)}return out}
 
 /* ---------- tiny synth for weather sounds ---------- */
 let AC=null;
@@ -1169,7 +1171,7 @@ function StormRun(opt){
   const H=[];            /* every move (fen before/after) and every weather event, for the review */
   let RV=null;           /* review state while the post-game review is open */
   $('#evalbar').style.visibility=showQ?'':'hidden';
-  const log=[];const forecast=opt.forecast||makeForecast();
+  const log=[];const forecast=(opt.forecast||makeForecast(NETM)).filter(k=>EVENTS[k]&&!(NETM&&EVENTS[k].live));
   board.clear();board.flip=human==='b';board.set(g);board.showDots=true;
   /* board hooks: frozen pieces cannot move, fog / ice / ufo marks drawn after every render */
   board.targets=function(from){if(st.frozen[from])return[];return Board.prototype.targets.call(this,from)};
@@ -1228,7 +1230,7 @@ function StormRun(opt){
     if(over&&NETM){
       const alive=!!(NET.conn&&NET.conn.open);
       $('#pf').innerHTML=`<button class="btn" id="wxRev">📈 Розбір</button>`+(HOST&&alive?`<button class="btn" id="wxAgain">↻ Реванш (кольори міняються)</button>`:alive?`<div class="small mut" style="flex:1;align-self:center">Чекаємо, поки друг почне реванш…</div>`:'')+`<button class="btn g" id="wxMenu">Вийти</button>`;$('#pf').style.display='flex';
-      if($('#wxAgain'))$('#wxAgain').onclick=()=>{const fc=makeForecast(),na=Math.max(6,gap());netSend({t:'start',color:human,freq:opt.freq,forecast:fc,nextAt:na,showQ:opt.showQ});stop(true);CUR=StormRun({...opt,color:other(human),forecast:fc,nextAt:na})};
+      if($('#wxAgain'))$('#wxAgain').onclick=()=>{const fc=makeForecast(true),na=Math.max(6,gap());netSend({t:'start',color:human,freq:opt.freq,forecast:fc,nextAt:na,showQ:opt.showQ});stop(true);CUR=StormRun({...opt,color:other(human),forecast:fc,nextAt:na})};
       $('#wxMenu').onclick=()=>showView('storm');$('#wxRev').onclick=openReview;return}
     if(over&&!opt.gallery){$('#pf').innerHTML=`<button class="btn" id="wxRev">📈 Розбір партії</button><button class="btn g" id="wxAgain">↻ Ще раз</button><button class="btn g" id="wxMenu">Налаштування</button>`;$('#pf').style.display='flex';$('#wxAgain').onclick=()=>{stopCur();CUR=StormRun(opt)};$('#wxMenu').onclick=()=>showView('storm');$('#wxRev').onclick=openReview;return}
     if(opt.gallery){$('#pf').innerHTML=`<button class="btn" id="wxGal">🎬 Обрати анімацію</button><button class="btn g sm" id="wxGalX">Вийти</button>`;$('#pf').style.display='flex';$('#wxGal').onclick=()=>galleryPick();$('#wxGalX').onclick=()=>showView('storm');return}
@@ -1269,10 +1271,12 @@ function StormRun(opt){
     for(const k of Object.keys(st.frozen)){st.frozen[k]--;if(st.frozen[k]<=0)delete st.frozen[k]}
     if(st.fog>0)st.fog--;
     if(st.secret&&ply>=st.secret.until)st.secret=null;
-    if(mv.captured==='q'){const hadCrown=!!st.crownQ;st.crownQ=false;await queenCapture(mv,hadCrown);if(mv.piece==='p'||hadCrown)st.crowns[mv.to]=1;board.skipAnim=true}
+    /* (the queen-capture cutscenes were removed on request; only the crown stays) */
+    if(mv.captured==='q'){const hadCrown=!!st.crownQ;st.crownQ=false;if(mv.piece==='p'||hadCrown)st.crowns[mv.to]=1}
     board.last=[mv.from,mv.to];board.arrows=[];board.badge=null;
     if(stolen){st.crownHide=mv.to;board.render(noAnim?undefined:[mv.from,mv.to]);moveSound(mv,g);await crownSteal(capSq,mv.to);st.crownHide=null;st.crowns[mv.to]=1;board.render()}
     else{board.render(noAnim?undefined:[mv.from,mv.to]);moveSound(mv,g)}
+    if(st.live)st.live.moveFns.forEach(f=>{try{f(mv)}catch(e){console.warn(e)}});
     await specialFx(mv);
     if(checkOver()){sendReady();return}
     render();
@@ -1292,10 +1296,12 @@ function StormRun(opt){
     if(st.ufo&&ply>=st.ufo.at){const p=st.ufo.p;st.ufo=null;await runEvent('ufoBack',{ufoP:p});if(over||!me.alive)return}
     if(ply===nextAt-1&&!upcoming){upcoming=wpick(forecast);if(Math.random()<.04)upcoming='meteor';snd&&snd('click');render()}
     if(opt.gallery)return;
+    if(st.live){if(ply>=nextAt)nextAt=ply+2;return}
     if(ply>=nextAt){const k=upcoming||wpick(forecast);upcoming=null;nextAt=ply+gap();await runEvent(k,{})}
   }
   async function runEvent(k,extra){
     if(!me.alive)return;busy=true;const ev=EVENTS[k];
+    if(ev.live){if(NETM||st.live)return;return startLive(k)}
     const fen=g.fen();const map0=mapOf(g);const turn=g.turn();
     let fogZ=null,fogR=null;
     if(k==='fog')fogR=opt.mode==='bot'?(human==='w'?[5,8]:[1,4]):[3,6];
@@ -1315,19 +1321,22 @@ function StormRun(opt){
     const rect=$('#board').getBoundingClientRect();
     const ctx={...X,res,map0,flip:board.flip,last:board.last,rect,fogZ,crowns:Object.keys(st.crowns),speed:opt.gallery&&GAL_FULL?1:MINI,hide2D:h=>{$('#board').style.visibility=h?'hidden':''}};
     board.sel=null;board.render();
-    if(!(opt.gallery&&GAL_FULL)){board.sel=null;await playMini(k,ctx);board.skipAnim=true}
+    let applied=false;
+    const apply=()=>{if(applied||!me.alive)return;applied=true;
+      if(res.fen!==g.fen()){g=new Chess(res.fen);board.set(g)}
+      board.last=null;board.arrows=[];board.badge=null;
+      if(res.fog){st.fog=res.fog;st.fogR=fogR}
+      if(res.freeze)res.freeze.forEach(s=>st.frozen[s]=4);
+      if(res.ufo)st.ufo={p:res.ufo.p,at:ply+4};
+      if(res.secret){st.secret={...res.secret,show:false,until:ply+6};}
+      for(const c of res.ch)if(c.t==='move'&&st.frozen[c.from]){st.frozen[c.to]=st.frozen[c.from];delete st.frozen[c.from]}
+      for(const c of res.ch)if(c.t==='kill')delete st.frozen[c.sq];
+      {const nc={};for(const k of Object.keys(st.crowns)){const mvd=res.ch.find(c=>c.t==='move'&&c.from===k);const kil=res.ch.find(c=>c.t==='kill'&&c.sq===k);if(kil)continue;nc[mvd?mvd.to:k]=1}st.crowns=nc}
+      board.skipAnim=true;board.render()};
+    if(!(opt.gallery&&GAL_FULL)){board.sel=null;if(window.STORM_FX){try{await window.STORM_FX.play(k,{res,board,H:{noise,tone,SFX},speed:1},apply)}catch(e){console.warn('fx',e)}}else await playMini(k,ctx)}
     else try{await play3D(k,ctx)}catch(e){console.warn('storm 3D failed',e);$('#board').style.visibility='';try{W3.on=false;W3.cv&&(W3.cv.style.display='none');W3.ui&&(W3.ui.style.display='none')}catch(_){}await play2D(k,ctx)}
     if(!me.alive){$('#board').style.visibility='';return}
-    /* apply */
-    if(res.fen!==g.fen()){g=new Chess(res.fen);board.set(g)}
-    board.last=null;board.arrows=[];board.badge=null;
-    if(res.fog){st.fog=res.fog;st.fogR=fogR}
-    if(res.freeze)res.freeze.forEach(s=>st.frozen[s]=4);
-    if(res.ufo)st.ufo={p:res.ufo.p,at:ply+4};
-    if(res.secret){st.secret={...res.secret,show:false,until:ply+6};}
-    for(const c of res.ch)if(c.t==='move'&&st.frozen[c.from]){st.frozen[c.to]=st.frozen[c.from];delete st.frozen[c.from]}
-    for(const c of res.ch)if(c.t==='kill')delete st.frozen[c.sq];
-    {const nc={};for(const k of Object.keys(st.crowns)){const mvd=res.ch.find(c=>c.t==='move'&&c.from===k);const kil=res.ch.find(c=>c.t==='kill'&&c.sq===k);if(kil)continue;nc[mvd?mvd.to:k]=1}st.crowns=nc}
+    apply();
     board.render();
     if(k!=='ufoBack'){S.storm.seen[k]=(S.storm.seen[k]||0)+1;save()}
     log.push({e:`${ev.i} ${esc(res.note)}`});H.push({ev:k,i:ev.i,note:res.note,fen:g.fen()});
@@ -1477,22 +1486,75 @@ function StormRun(opt){
 
   function W3flipZ(rank){/* rank 1..8 → world z of that rank's centre (for fog planes) */const r=rank-1;return board.flip?r-3.5:3.5-r}
 
+  /* ---- live events: they start, then run on their own for ~10 s while the game goes on ---- */
+  async function startLive(k){
+    const ev=EVENTS[k];busy=true;
+    {const r0=$('#board').getBoundingClientRect();if(r0.top<0||r0.bottom>innerHeight){$('#board').scrollIntoView({block:'center'});await sleep(250)}}
+    S.storm.seen[k]=(S.storm.seen[k]||0)+1;save();
+    log.push({e:`${ev.i} ${esc(ev.n)}`});H.push({ev:k,i:ev.i,note:ev.n,fen:g.fen()});
+    render({h:`${ev.i} <b>${ev.n}</b><br>${esc(ev.d)}`,k:'warn'});
+    const A=liveApi(k);st.live=A;
+    ev.run(A).catch(e=>console.warn('live',e)).finally(()=>{A.cleanup();if(st.live===A)st.live=null;if(me.alive&&!over){board.render();if(!busy)render()}});
+    await sleep(1500);   /* let the intro play before the turn continues */
+  }
+  function liveApi(k){
+    const ev=EVENTS[k];const B=$('#board');
+    const lay=document.createElement('div');lay.className='wxMini';lay.style.zIndex='31';B.appendChild(lay);
+    const page=document.createElement('div');page.style.cssText='position:fixed;inset:0;z-index:940;pointer-events:none;overflow:hidden';document.body.appendChild(page);
+    const sqEl=sq=>{for(let i=0;i<64;i++)if(board.idxToSq(i)===sq)return board.sqs[i];return null};
+    const A={k,lay,page,human,mode:opt.mode,moveFns:[],_clean:[],ended:false,
+      alive:()=>me.alive&&!over&&!RV&&!A.ended,
+      g:()=>g,map:()=>mapOf(g),busy:()=>busy,
+      rect:()=>B.getBoundingClientRect(),sz:()=>B.getBoundingClientRect().width/8,
+      center(sq){const br=B.getBoundingClientRect(),r=sqEl(sq).getBoundingClientRect();return{x:r.left-br.left+r.width/2,y:r.top-br.top+r.height/2}},
+      pageCenter(sq){const r=sqEl(sq).getBoundingClientRect();return{x:r.left+r.width/2,y:r.top+r.height/2}},
+      onMove(f){A.moveFns.push(f)},onClean(f){A._clean.push(f)},
+      threat(list){st.threat=list&&list.length?list:null},
+      stopProp(el){['pointerdown','mousedown','touchstart','click'].forEach(t=>el.addEventListener(t,e=>e.stopPropagation()))},
+      say(h){if(me.alive&&!over&&!RV)render({h:`${ev.i} <b>${ev.n}</b><br>${h}`,k:'warn'})},
+      log(note){if(!note)return;log.push({e:`${ev.i} ${esc(note)}`});H.push({ev:k,i:ev.i,note,fen:g.fen()})},
+      banner(title,sub){if(!A.alive())return Promise.resolve();const K=fxLayer();fxBanner(K,{icon:ev.i,title,sub,col:'#ff4d6d',dur:1300});return K.finish()},
+      flash(sq,col){const e=sqEl(sq);if(!e)return;const d=document.createElement('div');d.style.cssText=`position:absolute;inset:0;background:${col};pointer-events:none;z-index:5`;e.appendChild(d);d.animate([{opacity:.85},{opacity:0}],{duration:700,fill:'forwards'});setTimeout(()=>d.remove(),720)},
+      shake(px){B.animate([{transform:'translate(0,0)'},{transform:`translate(${px}px,${-px/2}px)`},{transform:`translate(${-px}px,${px/2}px)`},{transform:'translate(0,0)'}],{duration:180})},
+      set(m,ch,note){
+        if(!A.alive())return false;const fen=valid(m,g.turn(),g.fen());if(!fen)return false;
+        g=new Chess(fen);
+        for(const c of ch){if(c.t==='kill'){delete st.frozen[c.sq];delete st.crowns[c.sq]}
+          if(c.t==='move'){if(st.frozen[c.from]){st.frozen[c.to]=st.frozen[c.from];delete st.frozen[c.from]}if(st.crowns[c.from]){st.crowns[c.to]=1;delete st.crowns[c.from]}}}
+        board.last=null;board.arrows=[];board.badge=null;board.skipAnim=true;board.set(g);
+        A.log(note);
+        if(checkOver()){A.ended=true;return true}
+        unstick();if(g.in_check())snd&&snd('check');
+        if(opt.mode==='bot'&&g.turn()!==human&&!busy)botMove();
+        return true},
+      kill(sq,note){const m=mapOf(g);const p=m[sq];if(!p||p.type==='k')return false;delete m[sq];return A.set(m,[{t:'kill',sq}],note)},
+      move(from,to,note){const m=mapOf(g);const p=m[from];if(!p||m[to]||p.type==='k')return false;if(p.type==='p'&&(to[1]==='1'||to[1]==='8'))return false;delete m[from];m[to]=p;return A.set(m,[{t:'move',from,to}],note)},
+      add(sq,p,note){const m=mapOf(g);if(m[sq])return false;m[sq]=p;return A.set(m,[{t:'add',sq}],note)},
+      randomMove(){if(over||!me.alive||busy)return;const ms=g.moves({verbose:true}).filter(m=>!st.frozen[m.from]);if(!ms.length)return;const mv=g.move(rnd(ms));if(mv)afterMove(mv)},
+      cleanup(){if(A.done)return;A.done=true;A.ended=true;st.threat=null;lay.remove();page.remove();A._clean.forEach(f=>{try{f()}catch(e){}})}};
+    return A;
+  }
   async function botMove(){
     if(over||!me.alive)return;busy=true;render();
     const t0=Date.now();let uci=null;
     const ms=g.moves({verbose:true}).filter(m=>!st.frozen[m.from]);
     if(!ms.length){busy=false;return}
     const sm=Object.keys(st.frozen).length?ms.map(mUci).join(' '):null;
-    if(Math.random()<L.rnd){const caps=ms.filter(m=>m.captured);uci=mUci(Math.random()<.5&&caps.length?rnd(caps):rnd(ms))}
+    const fenThink=g.fen();
+    const dodge=st.threat&&st.threat.length?ms.filter(m=>st.threat.includes(m.from)):[];
+    if(dodge.length&&Math.random()<.65)uci=mUci(rnd(dodge));
+    else if(Math.random()<L.rnd){const caps=ms.filter(m=>m.captured);uci=mUci(Math.random()<.5&&caps.length?rnd(caps):rnd(ms))}
     else{try{const a=await (opt.level>=5?botStrongE:botE).analyse(g.fen(),{depth:L.depth,time:L.time,skill:L.skill,searchmoves:sm});uci=a.best}catch(e){}}
     if(!uci||!ms.some(m=>mUci(m)===uci||mUci(m)===uci.slice(0,4)))uci=mUci(rnd(ms));
     const wt=550+Math.random()*450-(Date.now()-t0);if(wt>0)await sleep(wt);
     if(!me.alive||over)return;
-    const mv=g.move(uciObj(uci));if(!mv){busy=false;return}
+    /* a live event may have changed the board while the bot was thinking */
+    if(g.fen()!==fenThink||g.turn()===human){busy=false;if(g.turn()!==human&&!over)setTimeout(botMove,60);return}
+    const mv=g.move(uciObj(uci));if(!mv){busy=false;if(g.turn()!==human&&!over)setTimeout(botMove,60);return}
     afterMove(mv);
   }
   me._ev=(k,p)=>{if(busy||over||(NETM&&!HOST))return'busy';runEvent(k,{ufoP:p||{type:'n',color:'w'}}).then(()=>{busy=false;render();sendReady();if(opt.mode==='bot'&&g.turn()!==human&&!over)botMove()});return'ok'};
-  function stop(keepNet){me.alive=false;$('#evalbar').style.visibility='';if(RV&&RV.back){const b=RV.back;RV=null;try{b()}catch(e){}}delete board.targets;delete board.render;$('#board').style.visibility='';board.arrows=[];
+  function stop(keepNet){me.alive=false;if(st.live){try{st.live.cleanup()}catch(e){}st.live=null}$('#evalbar').style.visibility='';if(RV&&RV.back){const b=RV.back;RV=null;try{b()}catch(e){}}delete board.targets;delete board.render;$('#board').style.visibility='';board.arrows=[];
     if(W3.on){W3.speed=20}
     if(NETM&&!keepNet){netSend({t:'bye'});netClose()}}
 
@@ -1560,7 +1622,7 @@ function hostWait(col,freq,showQ){
     $('#wxCopy').onclick=()=>{const t=$('#wxLink');t.select();(navigator.clipboard?navigator.clipboard.writeText(link):Promise.reject()).then(()=>toast('Посилання скопійовано')).catch(()=>{document.execCommand('copy');toast('Посилання скопійовано')})};
     if($('#wxShare'))$('#wxShare').onclick=()=>navigator.share({title:'Шахи-Буря',text:'Зіграймо в Шахи-Бурю! 🌪',url:link}).catch(()=>{});
   },()=>{
-    const fc=makeForecast(),na=Math.max(6,FREQ[freq][1][0]+Math.floor(Math.random()*(FREQ[freq][1][1]-FREQ[freq][1][0]+1)));
+    const fc=makeForecast(true),na=Math.max(6,FREQ[freq][1][0]+Math.floor(Math.random()*(FREQ[freq][1][1]-FREQ[freq][1][0]+1)));
     netSend({t:'start',color:other(myC),freq,forecast:fc,nextAt:na,showQ});
     snd&&snd('good');
     if(CUR&&CUR.stop)CUR.stop(true);CUR=null;panel('🌪 Шахи-Буря','','');
@@ -1589,7 +1651,6 @@ function galleryPick(){
   const list=[...POOL,'ufoBack'];
   const caps=['p','n','b','r','q','k'];
   modal(`<h2>🎬 Галерея анімацій</h2><div style="text-align:left;max-height:62vh;overflow:auto">
-    <h4 style="margin:4px 0 6px">💥 Взяття ферзя</h4><div class="list">${caps.map(p=>`<div class="it" data-gq="${p}"><img src="${PIC('w',p)}" width="28"><span class="nm">${QCAP[p].n}</span><span class="tag" style="background:var(--gold);color:#111">${'★'.repeat(QTIER[p])}${'☆'.repeat(4-QTIER[p])}</span></div>`).join('')}</div>
     <h4 style="margin:12px 0 6px">⚔️ Мат, рокіровка, перетворення</h4><div class="list">${CHKDEMO.map((d,i)=>`<div class="it" data-gx="${i}"><img src="${PIC('w',d.img)}" width="28"><span class="nm">${d.n}</span></div>`).join('')}</div>
     <h4 style="margin:12px 0 6px">🎬 3D-кіно мату</h4><div class="list">${(window.CINEMA_SCENES||[]).map((n,i)=>`<div class="it" data-gm="${i}"><span style="font-size:20px;width:28px;text-align:center">🎬</span><span class="nm">${i+1}. ${n}</span><span class="tag">${i<3?'~12 с':i<7?'~18 с':'~30 с'}</span></div>`).join('')}</div>
     <h4 style="margin:12px 0 6px">🏆 Легендарні мати (~2 хв)</h4><div class="list">${(window.LEGENDS||[]).map(l=>`<div class="it" data-gl="${l.id}"><span style="font-size:20px;width:28px;text-align:center">${l.i}</span><span class="nm">${l.n}</span><span class="tag">2 хв</span></div>`).join('')}</div>

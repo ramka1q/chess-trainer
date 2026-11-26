@@ -272,10 +272,12 @@ body.wood .sq.d.hl{background-image:linear-gradient(rgba(170,190,40,.5),rgba(170
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="pieces.js"></script>
 <script src="masters.js"></script>
-<script src="storm.js?v=2.4.0" defer></script>
-<script src="cinema.js?v=2.4.0" defer></script>
-<script src="legend.js?v=2.4.0" defer></script>
-<script src="icons.js?v=2.4.0" defer></script>
+<script src="storm-live.js?v=2.5.0" defer></script>
+<script src="storm-fx.js?v=2.5.0" defer></script>
+<script src="storm.js?v=2.5.0" defer></script>
+<script src="cinema.js?v=2.5.0" defer></script>
+<script src="legend.js?v=2.5.0" defer></script>
+<script src="icons.js?v=2.5.0" defer></script>
 <script>
 "use strict";
 /* ================= UTIL ================= */
@@ -881,7 +883,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='2.4.0';
+const APP_VERSION='2.5.0';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -3471,6 +3473,7 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '2.5.0':['🦖 10 нових живих подій у Шахах-Бурі (по ~10 секунд, поки ти граєш): динозавр-мисливець, пожежа, мавпа-злодійка, бомба, чорна діра, курка з яйцями, бліц','🏃 Три події ламають четверту стіну: фігура тікає з дошки по всьому сайту, чужа мишка, на сайті гасне світло','🌪 Усі старі події перемальовані: справжнє торнадо з вихором, гарна ворона, розгалужена блискавка, НЛО з променем, метеорит з вибухом. Тривають трохи довше','🛠 Фігури більше не стрибають на нове місце після кінця анімації','🎙 У 2-хвилинних фільмах персонажі розмовають українською, з субтитрами','🏆 Легендарні мати стало трохи легше отримати','Анімації взяття ферзя прибрано'],
   '2.4.0':['🏆 5 легендарних 3D-фільмів по 2 хвилини (Шахи-Буря): динозаври, ракета з космонавтами, вулкан, армія полеглих, знімальний майданчик','Відкриваються лише дуже красивими матами: спертий мат, мат пішаком або перетворенням, подвійний шах, мат після жертв, мат рокіровкою / на проході / королем','У бою бʼються справжні фігури з твоєї партії, а збиті фігури сидять на трибунах привидами й реагують','Кожен фільм ламає четверту стіну, і в кожного свій перехід із 2D у 3D та назад','Колекція з підказками — у вкладці Шахи-Буря'],
   '2.3.2':['🏠 Нове 3D-кіно: наша кімната розчиняється в сяючий пил','🌋 Різні світи для анімацій мату: вулкан, гори на заході, денна арена, бурхливе море, пустеля, сніг із полярним сяйвом','♟ Замість пентаграми тепер шахове магічне коло (фігури й дошка)'],
   '2.3.1':['⚔️ Звичайний шах більше не показує анімацію: тільки мат запускає 3D-кіно','🛠 Виправлено білий екран під час 3D-анімацій'],

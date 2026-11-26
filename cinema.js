@@ -21,7 +21,7 @@ function makeSynth(speed){
   const whoosh=(at,g=.3)=>noise(at,.32,{type:'bandpass',f:700,f2:4200,q:2,g,att:.03,rel:.25});
   const riser=(at,dur,g=.3)=>{noise(at,dur,{type:'bandpass',f:250,f2:6000,q:2.5,g,att:dur*.9,rel:.2});tone(110,at,dur,{type:'sawtooth',g:.05,f2:440,att:dur*.85,rel:.2})};
   const impact=(at,g=1)=>{drum(at,g);noise(at,2.2,{f:180,f2:30,g,att:.005,rel:1.9});tone(220,at,1.8,{f2:28,g:g*.45});noise(at,1.4,{type:'highpass',f:3000,g:g*.22,att:.005,rel:1.2})};
-  return{tone,noise,drum,choir,bell,whoosh,riser,impact,stop(){try{master.gain.cancelScheduledValues(a.currentTime);master.gain.setValueAtTime(master.gain.value,a.currentTime);master.gain.linearRampToValueAtTime(0,a.currentTime+.4);setTimeout(()=>a.close(),700)}catch(e){}}};
+  return{tone,noise,drum,choir,bell,whoosh,riser,impact,duck(on){try{master.gain.setTargetAtTime(on?.32:.85,a.currentTime,.15)}catch(e){}},stop(){try{master.gain.cancelScheduledValues(a.currentTime);master.gain.setValueAtTime(master.gain.value,a.currentTime);master.gain.linearRampToValueAtTime(0,a.currentTime+.4);setTimeout(()=>a.close(),700)}catch(e){}}};
 }
 /* a scored track from a few parameters: drone, choir, drums speeding up, riser into the climax */
 function score(M,{dur,root=55,minor=true,bpm=100,climax,bells=0,extra}){
