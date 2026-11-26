@@ -272,8 +272,8 @@ body.wood .sq.d.hl{background-image:linear-gradient(rgba(170,190,40,.5),rgba(170
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="pieces.js"></script>
 <script src="masters.js"></script>
-<script src="storm.js?v=2.2.0" defer></script>
-<script src="icons.js?v=2.2.0" defer></script>
+<script src="storm.js?v=2.2.1" defer></script>
+<script src="icons.js?v=2.2.1" defer></script>
 <script>
 "use strict";
 /* ================= UTIL ================= */
@@ -879,7 +879,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='2.2.0';
+const APP_VERSION='2.2.1';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -1394,7 +1394,9 @@ function VisionRun(opt){ /* opt:{task:'win'|'danger'|'mixed', n, onEnd, lesson, 
     const set=new Set(ans.map(a=>a.sq));
     const sec=task==='win'?secretTargets(fen,myCol(),ans):[];const secSet=new Set(sec.map(x=>x.sq));
     let good=0,miss=0,bad=0;const secFound=[];board.marks={};
-    set.forEach(s=>{if(picked.has(s)){board.marks[s]='good';good++}else{board.marks[s]='miss';miss++}});
+    /* marking a secret target means you saw the capture it starts with: that one counts too */
+    const viaOk=new Set(sec.filter(x=>picked.has(x.sq)).map(x=>x.via).filter(v=>!picked.has(v)));
+    set.forEach(s=>{if(picked.has(s)||viaOk.has(s)){board.marks[s]='good';good++}else{board.marks[s]='miss';miss++}});
     picked.forEach(s=>{if(set.has(s))return;if(secSet.has(s)){board.marks[s]='secret';secFound.push(s)}else{board.marks[s]='bad';bad++}});
     board.arrows=ans.map(a=>({from:a.from,to:a.sq,c:task==='win'?'g':'r'}));
     board.render();
@@ -1408,13 +1410,13 @@ function VisionRun(opt){ /* opt:{task:'win'|'danger'|'mixed', n, onEnd, lesson, 
     const secTxt=x=>x.disc?`твоє взяття <b>${esc(x.san1)}</b> відкриває лінію, і далі ти забереш ще й ${ACC[x.type]} на <b>${x.sq}</b> (${esc(x.san3)})`:`якщо суперник забере назад <b>${esc(x.san2)}</b>, він відкриє лінію, і ти забереш ${ACC[x.type]} на <b>${x.sq}</b> (${esc(x.san3)})`;
     let secHtml='';
     if(secFound.length){const xs=sec.filter(x=>secFound.includes(x.sq));S.secretFound=(S.secretFound||0)+1;save();setTimeout(()=>{snd('win');addXP(10,'секретний хід');confetti()},300);
-      secHtml=`<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:#efe6ff;border:1px solid #9b6bff;color:#3b2470">🤫 <b>Секретний хід!</b> Ти побачив те, що помічають лише уважні шахісти: ${xs.map(secTxt).join('; ')}. Тому суперникові взагалі не можна забирати назад!</div>`}
+      secHtml=`<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:#efe6ff;border:1px solid #9b6bff;color:#3b2470">🤫 <b>Секретний хід!</b> Ти побачив те, що помічають лише уважні шахісти: ${xs.map(secTxt).join('; ')}. Тому суперникові взагалі не можна забирати назад!${viaOk.size?`<div style="margin-top:4px;font-size:12px">Взяття на ${[...viaOk].join(', ')} зараховано: секретний хід саме з нього починається.</div>`:''}</div>`}
     else if(sec.length){secHtml=`<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:#f4efff;border:1px dashed #9b6bff;color:#3b2470">🤫 Тут був ще <b>секретний хід</b> (необовʼязковий, це не помилка): ${sec.map(secTxt).join('; ')}. Натисни фіолетовий <b>?</b>, щоб побачити.</div>`}
     render(ok?`<div class="t">✅ Точно!</div>${ans.length?list:'Нічого не висить, і ти це правильно побачив.'}${secHtml}`:
       `<div class="t">❌ Не все</div>${miss?`<span style="color:#b8860b">Жовтим</span>: пропущено. `:''}${bad?`<span style="color:#d33">Червоним</span>: ти позначив, але виграти цю фігуру не вийде — після розмінів ти втратиш стільки ж або більше. `:''}<div style="margin-top:6px">${ans.length?'Правильна відповідь:<br>'+list:'Тут нічого не висіло.'}</div><div class="mut small" style="margin-top:6px">Стрілки показують, хто б’є.</div>${secHtml}`,ok?'good':'bad');
     /* buttons to replay every exchange on the board; on a mistake the first problem plays by itself */
     const att=task==='win'?myCol():other(myCol());
-    const items=[...ans.map(a=>({sq:a.sq,from:a.from,kind:picked.has(a.sq)?'good':'miss'})),...[...picked].filter(s=>!set.has(s)&&!secSet.has(s)).map(s=>({sq:s,kind:'bad'})),...sec.map(x=>({sq:x.sq,kind:'secret',sec:x}))];
+    const items=[...ans.map(a=>({sq:a.sq,from:a.from,kind:picked.has(a.sq)||viaOk.has(a.sq)?'good':'miss'})),...[...picked].filter(s=>!set.has(s)&&!secSet.has(s)).map(s=>({sq:s,kind:'bad'})),...sec.map(x=>({sq:x.sq,kind:'secret',sec:x}))];
     curItems=items;board.qmarks={};items.forEach(it=>board.qmarks[it.sq]=it.kind);board.render();
     addBtns=()=>{if(!items.length)return;
       const box=document.querySelector('#coachBox .bub');if(!box)return;
@@ -3467,6 +3469,7 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '2.2.1':['🤫 Якщо позначив секретну фігуру, взяття, з якого секрет починається, зараховується автоматично'],
   '2.2.0':['🤫 Секретні ходи у вправах «Бери безкоштовне»: фігури, які можна виграти, якщо суперник забере назад і відкриє лінію. Знайшов: окрема похвала й бонусні XP. Не знайшов: це не помилка, тренер просто покаже фіолетовий «?»','🔄 Синхронізація надсилає прогрес рідше, щоб GitHub її не блокував'],
   '2.1.2':['🛠 Пройдений урок більше не «зникає» з увімкненою синхронізацією','🛠 Вікно «Урок пройдено» не закривається кліком повз нього, а якщо закрилось, кнопка під дошкою відкриває його знову'],
   '2.1.1':['🔗 У поясненні розмінів тренер тепер показує звʼязані фігури: наприклад, ферзь «бʼє» клітинку, але забрати не може, бо звʼязаний з королем'],
