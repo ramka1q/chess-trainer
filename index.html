@@ -76,7 +76,7 @@ body.wood .sq.d.hl{background-image:linear-gradient(rgba(170,190,40,.5),rgba(170
 .thOpt .pv i{display:block;background-size:300% 300%}
 .sq.l.hl{background:var(--hl-l)} .sq.d.hl{background:var(--hl-d)}
 .sq .qm{position:absolute;top:1%;left:32%;width:36%;height:36%;border-radius:50%;z-index:6;display:flex;align-items:center;justify-content:center;font-weight:900;color:#fff;font-size:calc(var(--bs)/34);cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.45),0 0 0 2px #fff;animation:qmPulse 1.6s ease-in-out infinite}
-.sq .qm.good{background:#81B64C} .sq .qm.miss{background:#e0a800} .sq .qm.bad{background:#FA412D}
+.sq .qm.good{background:#81B64C} .sq .qm.secret{background:#9b6bff} .sq .qm.miss{background:#e0a800} .sq .qm.bad{background:#FA412D}
 @keyframes qmPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
 .sq img.pc{width:100%;height:100%;position:relative;z-index:3;pointer-events:none;will-change:transform}
 .sq .co{position:absolute;font-size:calc(var(--bs)/46);font-weight:700;z-index:2;pointer-events:none}
@@ -91,6 +91,7 @@ body.wood .sq.d.hl{background-image:linear-gradient(rgba(170,190,40,.5),rgba(170
 .mk.good{box-shadow:inset 0 0 0 calc(var(--bs)/120) var(--green);background:rgba(129,182,76,.35)}
 .mk.miss{box-shadow:inset 0 0 0 calc(var(--bs)/120) var(--gold);background:rgba(247,198,49,.35)}
 .mk.bad{box-shadow:inset 0 0 0 calc(var(--bs)/120) var(--red);background:rgba(250,65,45,.35)}
+.mk.secret{box-shadow:inset 0 0 0 calc(var(--bs)/120) #9b6bff;background:rgba(155,107,255,.38)}
 .mk.hint{background:rgba(38,194,163,.45)}
 .sq .badge{position:absolute;top:-14%;right:-14%;width:42%;height:42%;border-radius:50%;z-index:6;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:calc(var(--bs)/44);box-shadow:0 2px 3px rgba(0,0,0,.4);pointer-events:none;border:2px solid #fff3}
 #arrows{position:absolute;inset:0;z-index:5;pointer-events:none}
@@ -271,8 +272,8 @@ body.wood .sq.d.hl{background-image:linear-gradient(rgba(170,190,40,.5),rgba(170
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="pieces.js"></script>
 <script src="masters.js"></script>
-<script src="storm.js?v=2.1.2" defer></script>
-<script src="icons.js?v=2.1.2" defer></script>
+<script src="storm.js?v=2.2.0" defer></script>
+<script src="icons.js?v=2.2.0" defer></script>
 <script>
 "use strict";
 /* ================= UTIL ================= */
@@ -367,6 +368,27 @@ function winnable(fen,att){
       const t=new Chess(g.fen());t.move({from:r.from,to:m.to,promotion:'q'});
       const recap=t.moves({verbose:true}).filter(x=>x.to===m.to);
       out.push({sq:m.to,type:victim.type,from:r.from,defended:recap.length>0,pinned:defenders.length>0&&!recap.length,gain:r.gain});
+    }
+  }
+  return out;
+}
+/* "Secret" targets: pieces you cannot win right now, but that become winnable if the opponent
+   takes back on a square you captured on (the recapturing piece opens a line, e.g. hxg6 opens the h-file
+   and Rxh8 wins a rook). Finding them earns extra praise; missing them is never a mistake. */
+function secretTargets(fen,att,ans){
+  const out=[],have=new Set(ans.map(a=>a.sq));
+  for(const a of ans){
+    if(!a.defended||!a.from)continue;
+    const t=new Chess();if(!t.load(setTurn(fen,att)))continue;
+    const m1=t.move({from:a.from,to:a.sq,promotion:'q'});if(!m1)continue;
+    const afterMine=new Set(winnable(t.fen(),att).map(w=>w.sq)); /* already open after YOUR capture (a discovered attack) */
+    for(const r of t.moves({verbose:true}).filter(x=>x.to===a.sq&&x.captured)){
+      const t2=new Chess(t.fen());const m2=t2.move(r);if(!m2)continue;
+      for(const x of winnable(t2.fen(),att)){
+        if(x.sq===a.sq||have.has(x.sq)||VAL[x.type]<3||out.some(o=>o.sq===x.sq))continue;
+        const t3=new Chess(t2.fen());const m3=t3.move({from:x.from,to:x.sq,promotion:'q'});if(!m3)continue;
+        out.push({sq:x.sq,type:x.type,via:a.sq,m1:{from:m1.from,to:m1.to,promotion:m1.promotion},m2:{from:m2.from,to:m2.to,promotion:m2.promotion},m3:{from:m3.from,to:m3.to,promotion:m3.promotion},san1:m1.san,san2:m2.san,san3:m3.san,disc:afterMine.has(x.sq)});
+      }
     }
   }
   return out;
@@ -857,7 +879,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='2.1.2';
+const APP_VERSION='2.2.0';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -1349,7 +1371,7 @@ function VisionRun(opt){ /* opt:{task:'win'|'danger'|'mixed', n, onEnd, lesson, 
     const g=new Chess(fen);board.flip=g.turn()==='b';board.clear();board.set(g);board.canMove=()=>false;
     const myC=g.turn();
     players(plHtml('Суперник','',other(myC)),plHtml('Ти',myC==='w'?'білі, твій хід':'чорні, твій хід',myC));
-    board.onClick=sq=>{if(checked){const it=curItems.find(x=>x.sq===sq);if(it){snd('click');demo(it,task==='win'?myC:other(myC))}return}const pc=g.get(sq);if(!pc||pc.type==='k')return;const want=task==='win'?other(myC):myC;if(pc.color!==want){snd('bad');return}
+    board.onClick=sq=>{if(checked){const it=curItems.find(x=>x.sq===sq);if(it){snd('click');it.kind==='secret'?secretDemo(it.sec):demo(it,task==='win'?myC:other(myC))}return}const pc=g.get(sq);if(!pc||pc.type==='k')return;const want=task==='win'?other(myC):myC;if(pc.color!==want){snd('bad');return}
       picked.has(sq)?picked.delete(sq):picked.add(sq);snd('click');board.marks={};picked.forEach(s=>board.marks[s]='pick');board.render()};
     t0=Date.now();clearInterval(tmr);tmr=setInterval(()=>{const e=$('#visT');if(e)e.textContent=((Date.now()-t0)/1000).toFixed(0)+' с'},500);
     render(task==='win'?`<div class="t">🎁 Що можна ВИГРАТИ?</div><div class="small" style="margin-bottom:4px;color:#555">Етап: <b>${VL[0]}</b> — на дошці від 0 до ${VMAX} ${plural(VMAX,'фігури','фігур','фігур')}</div>Познач <b>усі фігури суперника</b>, які ти можеш забрати прямо зараз без втрат (без захисту або захищені слабше, ніж коштують). Якщо таких немає, одразу тисни «Перевірити».`:
@@ -1370,9 +1392,10 @@ function VisionRun(opt){ /* opt:{task:'win'|'danger'|'mixed', n, onEnd, lesson, 
   function check(){
     checked=true;clearInterval(tmr);
     const set=new Set(ans.map(a=>a.sq));
-    let good=0,miss=0,bad=0;board.marks={};
+    const sec=task==='win'?secretTargets(fen,myCol(),ans):[];const secSet=new Set(sec.map(x=>x.sq));
+    let good=0,miss=0,bad=0;const secFound=[];board.marks={};
     set.forEach(s=>{if(picked.has(s)){board.marks[s]='good';good++}else{board.marks[s]='miss';miss++}});
-    picked.forEach(s=>{if(!set.has(s)){board.marks[s]='bad';bad++}});
+    picked.forEach(s=>{if(set.has(s))return;if(secSet.has(s)){board.marks[s]='secret';secFound.push(s)}else{board.marks[s]='bad';bad++}});
     board.arrows=ans.map(a=>({from:a.from,to:a.sq,c:task==='win'?'g':'r'}));
     board.render();
     const ok=!miss&&!bad;me.results.push(ok);
@@ -1381,20 +1404,44 @@ function VisionRun(opt){ /* opt:{task:'win'|'danger'|'mixed', n, onEnd, lesson, 
     const g=new Chess(fen);
     const list=ans.map(a=>`${NAME[a.type]} на <b>${a.sq}</b>${a.pinned?' (захисник зв’язаний і не може забрати назад)':a.defended?` (є захист, але після всіх розмінів ти виграєш ${a.gain} ${plural(a.gain,'очко','очки','очок')})`:' (без захисту)'}`).join('<br>');
     if(ok){snd('good');addXP(5);}else snd('bad');
-    render(ok?`<div class="t">✅ Точно!</div>${ans.length?list:'Нічого не висить, і ти це правильно побачив.'}`:
-      `<div class="t">❌ Не все</div>${miss?`<span style="color:#b8860b">Жовтим</span>: пропущено. `:''}${bad?`<span style="color:#d33">Червоним</span>: ти позначив, але виграти цю фігуру не вийде — після розмінів ти втратиш стільки ж або більше. `:''}<div style="margin-top:6px">${ans.length?'Правильна відповідь:<br>'+list:'Тут нічого не висіло.'}</div><div class="mut small" style="margin-top:6px">Стрілки показують, хто б’є.</div>`,ok?'good':'bad');
+    /* secret moves: extra praise when found, only a friendly tip when not */
+    const secTxt=x=>x.disc?`твоє взяття <b>${esc(x.san1)}</b> відкриває лінію, і далі ти забереш ще й ${ACC[x.type]} на <b>${x.sq}</b> (${esc(x.san3)})`:`якщо суперник забере назад <b>${esc(x.san2)}</b>, він відкриє лінію, і ти забереш ${ACC[x.type]} на <b>${x.sq}</b> (${esc(x.san3)})`;
+    let secHtml='';
+    if(secFound.length){const xs=sec.filter(x=>secFound.includes(x.sq));S.secretFound=(S.secretFound||0)+1;save();setTimeout(()=>{snd('win');addXP(10,'секретний хід');confetti()},300);
+      secHtml=`<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:#efe6ff;border:1px solid #9b6bff;color:#3b2470">🤫 <b>Секретний хід!</b> Ти побачив те, що помічають лише уважні шахісти: ${xs.map(secTxt).join('; ')}. Тому суперникові взагалі не можна забирати назад!</div>`}
+    else if(sec.length){secHtml=`<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:#f4efff;border:1px dashed #9b6bff;color:#3b2470">🤫 Тут був ще <b>секретний хід</b> (необовʼязковий, це не помилка): ${sec.map(secTxt).join('; ')}. Натисни фіолетовий <b>?</b>, щоб побачити.</div>`}
+    render(ok?`<div class="t">✅ Точно!</div>${ans.length?list:'Нічого не висить, і ти це правильно побачив.'}${secHtml}`:
+      `<div class="t">❌ Не все</div>${miss?`<span style="color:#b8860b">Жовтим</span>: пропущено. `:''}${bad?`<span style="color:#d33">Червоним</span>: ти позначив, але виграти цю фігуру не вийде — після розмінів ти втратиш стільки ж або більше. `:''}<div style="margin-top:6px">${ans.length?'Правильна відповідь:<br>'+list:'Тут нічого не висіло.'}</div><div class="mut small" style="margin-top:6px">Стрілки показують, хто б’є.</div>${secHtml}`,ok?'good':'bad');
     /* buttons to replay every exchange on the board; on a mistake the first problem plays by itself */
     const att=task==='win'?myCol():other(myCol());
-    const items=[...ans.map(a=>({sq:a.sq,from:a.from,kind:picked.has(a.sq)?'good':'miss'})),...[...picked].filter(s=>!set.has(s)).map(s=>({sq:s,kind:'bad'}))];
+    const items=[...ans.map(a=>({sq:a.sq,from:a.from,kind:picked.has(a.sq)?'good':'miss'})),...[...picked].filter(s=>!set.has(s)&&!secSet.has(s)).map(s=>({sq:s,kind:'bad'})),...sec.map(x=>({sq:x.sq,kind:'secret',sec:x}))];
     curItems=items;board.qmarks={};items.forEach(it=>board.qmarks[it.sq]=it.kind);board.render();
     addBtns=()=>{if(!items.length)return;
       const box=document.querySelector('#coachBox .bub');if(!box)return;
-      box.insertAdjacentHTML('beforeend',`<div class="small" style="margin-top:8px;color:#555">Натисни на <b>?</b> на дошці, щоб побачити, чому так.</div><div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px">${items.map((it,i)=>`<button class="chip" data-x="${i}" style="background:${it.kind==='good'?'#d7ecc4':it.kind==='miss'?'#f8e7a8':'#f6c9c2'};color:#222">▶ Показати ${it.sq}</button>`).join('')}</div>`);
-      box.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>demo(items[+b.dataset.x],att))};
+      box.insertAdjacentHTML('beforeend',`<div class="small" style="margin-top:8px;color:#555">Натисни на <b>?</b> на дошці, щоб побачити, чому так.</div><div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px">${items.map((it,i)=>`<button class="chip" data-x="${i}" style="background:${it.kind==='good'?'#d7ecc4':it.kind==='miss'?'#f8e7a8':it.kind==='secret'?'#e3d5ff':'#f6c9c2'};color:#222">${it.kind==='secret'?'🤫 Секрет':'▶ Показати'} ${it.sq}</button>`).join('')}</div>`);
+      box.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>{const it=items[+b.dataset.x];it.kind==='secret'?secretDemo(it.sec):demo(it,att)})};
     addBtns();
   }
   function myCol(){return new Chess(fen).turn()}
   let demoTok=0;
+  async function secretDemo(x){
+    const my=++demoTok;const saved={marks:{...board.marks},arrows:board.arrows.slice(),qmarks:{...(board.qmarks||{})}};board.qmarks={};
+    const t=new Chess(setTurn(fen,myCol()));board.g=t;board.marks={[x.sq]:'secret'};board.arrows=[];board.last=null;board.render();
+    const lines=[];
+    const say=fin=>{coachSay(`<div class="t">🤫 Секретний хід: ${NAME[x.type]} на ${x.sq}</div>${lines.map(l=>`<div style="margin:2px 0">${l}</div>`).join('')}${fin||''}<div style="margin-top:8px"><button class="chip" id="dmBack" style="background:#eee;color:#222">↩ Повернутись до позиції</button></div>`,'good');
+      const bb=$('#dmBack');if(bb)bb.onclick=()=>{demoTok++;board.set(new Chess(fen));board.marks=saved.marks;board.arrows=saved.arrows;board.qmarks=saved.qmarks;board.render();render(lastMsg,lastKind);addBtns&&addBtns()}};
+    say('<div class="mut small">Дивись на дошку…</div>');
+    const seq=x.disc?[[x.m1,m=>`Ти забираєш ${ACC[m.captured]}… і цим <b>відкриваєш лінію</b> для своєї фігури!`,'g'],[x.m2,m=>`Суперник забирає назад.`,'r'],[x.m3,m=>`А ти забираєш ${ACC[m.captured]} по відкритій лінії!`,'g']]
+      :[[x.m1,m=>`Ти забираєш ${ACC[m.captured]}.`,'g'],[x.m2,m=>`Суперник забирає назад… але цим він <b>відкриває лінію</b>!`,'r'],[x.m3,m=>`Ти забираєш ${ACC[m.captured]}!`,'g']];
+    for(let i=0;i<seq.length;i++){
+      await sleep(i?1600:600);if(my!==demoTok||!me.alive)return;
+      const[u,txt,c]=seq[i];const m=t.move(u);if(!m)break;
+      board.last=[m.from,m.to];board.arrows=[{from:m.from,to:m.to,c}];board.render();moveSound(m,t);
+      lines.push(`${i+1}. <b>${esc(m.san)}</b> — ${txt(m)}`);say('');
+    }
+    if(my!==demoTok)return;
+    say(x.disc?`<div style="margin-top:6px"><b>Висновок:</b> твоє перше взяття бʼє двічі: забирає фігуру і відкриває лінію на ${ACC[x.type]}. Помітити таке заздалегідь і є секретний хід.</div>`:`<div style="margin-top:6px"><b>Висновок:</b> суперникові не можна забирати назад, бо тоді він втратить ${ACC[x.type]}. Тож твоє перше взяття просто виграє матеріал. Помітити таке заздалегідь і є секретний хід.</div>`);
+  }
   async function demo(it,att){
     const my=++demoTok;const saved={marks:{...board.marks},arrows:board.arrows.slice(),qmarks:{...(board.qmarks||{})}};board.qmarks={};
     const L=exchangeLine(fen,it.sq,att,it.from);
@@ -3065,7 +3112,7 @@ function mergeState(A,B){ /* A = this device, B = remote; returns merged copy */
   return out;
 }
 let syncT=null,syncBusy=false,syncQuiet=false;
-function syncSoon(){if(!SY||!SY.token||!SY.gist||syncQuiet)return;clearTimeout(syncT);syncT=setTimeout(()=>syncNow(),4000)}
+function syncSoon(){if(!SY||!SY.token||!SY.gist||syncQuiet)return;clearTimeout(syncT);syncT=setTimeout(()=>syncNow(),20000)} /* not more often: GitHub limits frequent gist updates */
 async function readGist(){
   const r=await gh('/gists/'+SY.gist);if(!r.ok)throw new Error('GitHub '+r.status);const j=await r.json();const f=j.files[SYNC_FILE];if(!f)return null;
   const txt=f.truncated?await (await fetch(f.raw_url)).text():f.content;return JSON.parse(txt||'{}');
@@ -3420,6 +3467,7 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '2.2.0':['🤫 Секретні ходи у вправах «Бери безкоштовне»: фігури, які можна виграти, якщо суперник забере назад і відкриє лінію. Знайшов: окрема похвала й бонусні XP. Не знайшов: це не помилка, тренер просто покаже фіолетовий «?»','🔄 Синхронізація надсилає прогрес рідше, щоб GitHub її не блокував'],
   '2.1.2':['🛠 Пройдений урок більше не «зникає» з увімкненою синхронізацією','🛠 Вікно «Урок пройдено» не закривається кліком повз нього, а якщо закрилось, кнопка під дошкою відкриває його знову'],
   '2.1.1':['🔗 У поясненні розмінів тренер тепер показує звʼязані фігури: наприклад, ферзь «бʼє» клітинку, але забрати не може, бо звʼязаний з королем'],
   '2.1.0':['💻 Сайт може думати Stockfish 19 з ПК-версії, один в один як через .cmd: запусти «Запустити шахи.cmd» і увімкни в Налаштуваннях «Рахувати через ПК-версію»'],
