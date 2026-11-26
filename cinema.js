@@ -52,9 +52,9 @@ function pieceTex(T,src){return new Promise(res=>{const im=new Image();im.onload
 async function engine(I,sceneFn){
   const T=window.THREE||await window.loadThree();
   const speed=I.speed||1;
-  const cv=document.createElement('canvas');cv.id='cineCv';cv.style.cssText='position:fixed;inset:0;z-index:960;width:100vw;height:100vh;background:#000';document.body.appendChild(cv);
-  const ui=document.createElement('button');ui.textContent='⏭';ui.title='Пропустити';ui.style.cssText='position:fixed;right:16px;bottom:16px;z-index:972;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:50%;width:48px;height:48px;font-size:20px;cursor:pointer';document.body.appendChild(ui);
-  const white=document.createElement('div');white.style.cssText='position:fixed;inset:0;z-index:971;background:#fff;opacity:1;pointer-events:none;transition:opacity .9s';document.body.appendChild(white);
+  const cv=document.createElement('canvas');cv.id='cineCv';cv.style.cssText='position:fixed;inset:0;z-index:980;width:100vw;height:100vh;background:#000';document.body.appendChild(cv);
+  const ui=document.createElement('button');ui.textContent='⏭';ui.title='Пропустити';ui.style.cssText='position:fixed;right:16px;bottom:16px;z-index:992;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:50%;width:48px;height:48px;font-size:20px;cursor:pointer';document.body.appendChild(ui);
+  const white=document.createElement('div');white.style.cssText='position:fixed;inset:0;z-index:991;background:#fff;opacity:1;pointer-events:none;transition:opacity .9s';document.body.appendChild(white);
   requestAnimationFrame(()=>requestAnimationFrame(()=>white.style.opacity=0));
   const R=new T.WebGLRenderer({canvas:cv,antialias:!LOWC,powerPreference:'high-performance'});R.setPixelRatio(Math.min(devicePixelRatio||1,LOWC?1:1.5));
   const scene=new T.Scene();scene.background=new T.Color(0x020006);scene.fog=new T.FogExp2(0x05010d,.045);

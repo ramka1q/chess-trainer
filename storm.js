@@ -932,7 +932,9 @@ async function boardTo3D(kingSq){
   /* 3. white flash — the 3D scene starts inside it */
   const wf=document.createElement('div');wf.style.cssText='position:fixed;inset:0;z-index:970;background:#fff;opacity:0;pointer-events:none';document.body.appendChild(wf);
   await wf.animate([{opacity:0},{opacity:1}],{duration:220,fill:'forwards'}).finished.catch(()=>{});
-  return()=>{stage.remove();inv.remove();B.style.visibility='';wf.animate([{opacity:1},{opacity:0}],{duration:700,fill:'forwards'}).finished.catch(()=>{}).then(()=>wf.remove())};
+  /* the flash must not stay on top of the 3D scene (it made the whole screen white) */
+  setTimeout(()=>{wf.animate([{opacity:1},{opacity:0}],{duration:500,fill:'forwards'}).finished.catch(()=>{}).then(()=>wf.remove())},400);
+  return()=>{stage.remove();inv.remove();B.style.visibility='';wf.remove()};
 }
 /* how "special" is this checkmate? more unusual mates get the longer, wilder cinematic */
 function mateLevel(g,mv,king,checkers){
@@ -1339,7 +1341,8 @@ function StormRun(opt){
     try{
       if(mv.flags.includes('k')||mv.flags.includes('q')){const r=mv.from[1];const ks=mv.flags.includes('k');await playCastle({color:mv.color,kFrom:mv.from,kTo:mv.to,rFrom:(ks?'h':'a')+r,rTo:(ks?'f':'d')+r})}
       if(mv.flags.includes('p'))await playPromo({color:mv.color,to:mv.to,promo:mv.promotion});
-      if(g.in_check()){const king=board.kingSq(g.turn());const checkers=attackersOf(g,king,mv.color);
+      /* only checkmate gets an animation; an ordinary check plays nothing */
+      if(g.in_checkmate()){const king=board.kingSq(g.turn());const checkers=attackersOf(g,king,mv.color);
         const info={color:mv.color,piece:mv.promotion||mv.piece,from:mv.from,to:mv.to,king,checkers,disc:!checkers.some(c=>c.sq===mv.to),dbl:checkers.length>1,mate:g.in_checkmate(),variant:window.CHK_VARIANT};window.CHK_VARIANT=null;
         if(info.mate&&window.playCinema){
           /* checkmate: the board breaks into a 3D cinematic; harder mates get the longer version */
@@ -1347,7 +1350,7 @@ function StormRun(opt){
           try{back=await boardTo3D(king);await window.playCinema({color:mv.color,piece:info.piece,kingColor:g.turn(),level})}
           catch(e){console.warn('cinema failed',e);back&&back();back=null;await playCheck(info)}
           back&&back();
-        }else await playCheck(info)}
+        }else await playCheck(info)}  /* (only reached for a mate when 3D is unavailable) */
     }catch(e){console.warn('fx',e);$('#board').querySelectorAll('.wxMini').forEach(x=>x.remove())}
   }
   /* replays the capture as a 3D cutscene: the 2D board still shows the position before the move */
@@ -1563,14 +1566,7 @@ function hostWait(col,freq,showQ){
 const GAL_FEN='r1bqk2r/pp1n1ppp/2pbpn2/3p4/2PP4/2N1PN2/PPQ1BPPP/R1B1K2R w KQkq - 0 8';
 /* demo positions: white captures the black queen with the given piece */
 const CHKDEMO=[
-  {n:'Шах пішаком',fen:'4k3/8/5P2/8/8/8/8/4K3 w - - 0 1',m:['f6','f7'],img:'p'},
-  {n:'Шах конем',fen:'4k3/8/8/8/2N5/8/8/4K3 w - - 0 1',m:['c4','d6'],img:'n'},
-  {n:'Шах слоном',fen:'4k3/8/8/8/8/8/8/4KB2 w - - 0 1',m:['f1','b5'],img:'b'},
-  {n:'Шах турою',fen:'4k3/8/8/8/8/8/8/R3K3 w - - 0 1',m:['a1','a8'],img:'r'},
-  {n:'Шах ферзем',fen:'4k3/8/8/8/8/8/8/3QK3 w - - 0 1',m:['d1','h5'],img:'q'},
-  {n:'Відкритий шах',fen:'4k3/8/8/8/4N3/8/8/4RK2 w - - 0 1',m:['e4','c5'],img:'r'},
-  {n:'Подвійний шах',fen:'4k3/8/8/8/4N3/8/8/4RK2 w - - 0 1',m:['e4','f6'],img:'n'},
-  {n:'Мат: дуель сил',fen:'6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1',m:['a1','a8'],img:'k'},
+  {n:'Мат (3D-кіно за складністю)',fen:'6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1',m:['a1','a8'],img:'k'},
   {n:'Рокіровка',fen:'4k3/8/8/8/8/8/8/4K2R w K - 0 1',m:['e1','g1'],img:'r'},
   {n:'Перетворення пішака',fen:'4k3/1P6/8/8/8/8/8/4K3 w - - 0 1',m:['b7','b8'],img:'q'},
 ];
@@ -1587,7 +1583,7 @@ function galleryPick(){
   const caps=['p','n','b','r','q','k'];
   modal(`<h2>🎬 Галерея анімацій</h2><div style="text-align:left;max-height:62vh;overflow:auto">
     <h4 style="margin:4px 0 6px">💥 Взяття ферзя</h4><div class="list">${caps.map(p=>`<div class="it" data-gq="${p}"><img src="${PIC('w',p)}" width="28"><span class="nm">${QCAP[p].n}</span><span class="tag" style="background:var(--gold);color:#111">${'★'.repeat(QTIER[p])}${'☆'.repeat(4-QTIER[p])}</span></div>`).join('')}</div>
-    <h4 style="margin:12px 0 6px">⚔️ Шах (40 варіацій), мат та інше</h4><div class="list">${CHKDEMO.map((d,i)=>`<div class="it" ${i<7?'':`data-gx="${i}"`} style="flex-wrap:wrap"><img src="${PIC('w',d.img)}" width="28"><span class="nm">${d.n}</span>${i<7?`<span style="display:flex;gap:4px">${[0,1,2,3,4].map(v=>`<button class="chip" data-gx="${i}" data-gv="${v}" style="padding:2px 8px">${v+1}</button>`).join('')}</span>`:''}</div>`).join('')}</div>
+    <h4 style="margin:12px 0 6px">⚔️ Мат, рокіровка, перетворення</h4><div class="list">${CHKDEMO.map((d,i)=>`<div class="it" data-gx="${i}"><img src="${PIC('w',d.img)}" width="28"><span class="nm">${d.n}</span></div>`).join('')}</div>
     <h4 style="margin:12px 0 6px">🎬 3D-кіно мату</h4><div class="list">${(window.CINEMA_SCENES||[]).map((n,i)=>`<div class="it" data-gm="${i}"><span style="font-size:20px;width:28px;text-align:center">🎬</span><span class="nm">${i+1}. ${n}</span><span class="tag">${i<3?'~12 с':i<7?'~18 с':'~30 с'}</span></div>`).join('')}</div>
     <h4 style="margin:12px 0 6px">👑 Корона</h4><div class="list"><div class="it" data-gc="1"><img src="${CROWN_SVG}" width="28"><span class="nm">Хтось збиває пішака з короною і забирає її</span></div></div>
     <h4 style="margin:12px 0 6px">🌪 Погода</h4><div class="list">${list.map(k=>`<div class="it" data-gk="${k}"><span style="font-size:22px;width:30px;text-align:center">${EVENTS[k].i}</span><span class="nm">${EVENTS[k].n}${k==='ufoBack'?' (повернення)':''}</span><span class="tag" style="background:${RAR[EVENTS[k].rar].col};color:#111">${RAR[EVENTS[k].rar].n}</span></div>`).join('')}</div></div>
