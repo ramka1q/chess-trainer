@@ -59,7 +59,7 @@ function drawSaucer(x,cx,cy,s,t){x.save();x.translate(cx,cy);
 async function play(k,X,commit){
   const B=document.getElementById('board');if(!B){commit();return}
   const res=X.res||{ch:[]},H=X.H;
-  const cv=document.createElement('canvas');cv.style.cssText='position:fixed;inset:0;width:100vw;height:100vh;z-index:950;pointer-events:none';document.body.appendChild(cv);
+  const cv=document.createElement('canvas');cv.style.cssText='position:fixed;left:0;top:0;width:100%;height:100%;z-index:950;pointer-events:none';document.body.appendChild(cv);
   const dpr=Math.min(devicePixelRatio||1,LOWF?1:2);const x=cv.getContext('2d');
   const fit=()=>{cv.width=innerWidth*dpr;cv.height=innerHeight*dpr;x.setTransform(dpr,0,0,dpr,0,0)};fit();addEventListener('resize',fit);
   const br=()=>B.getBoundingClientRect();

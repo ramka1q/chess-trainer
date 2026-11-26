@@ -54,7 +54,7 @@ function pieceTex(T,src){return new Promise(res=>{const im=new Image();im.onload
 async function engine(I,sceneFn){
   const T=window.THREE||await window.loadThree();
   const speed=I.speed||1;
-  const cv=document.createElement('canvas');cv.id='cineCv';cv.style.cssText='position:fixed;inset:0;z-index:980;width:100vw;height:100vh;background:#000';document.body.appendChild(cv);
+  const cv=document.createElement('canvas');cv.id='cineCv';cv.style.cssText='position:fixed;left:0;top:0;z-index:980;width:100%;height:100%;touch-action:none;background:#000';document.body.appendChild(cv);
   const ui=document.createElement('button');ui.textContent='⏭';ui.title='Пропустити';ui.style.cssText='position:fixed;right:16px;bottom:16px;z-index:992;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:50%;width:48px;height:48px;font-size:20px;cursor:pointer';document.body.appendChild(ui);
   const white=document.createElement('div');white.style.cssText=`position:fixed;inset:0;z-index:991;background:${I.veil||'#fff'};opacity:1;pointer-events:none;transition:opacity ${I.veilIn||.9}s`;document.body.appendChild(white);
   const R=new T.WebGLRenderer({canvas:cv,antialias:!LOWC,powerPreference:'high-performance'});R.setPixelRatio(Math.min(devicePixelRatio||1,LOWC?1:1.5));

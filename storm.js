@@ -913,7 +913,8 @@ async function playPromo(I){
 }
 async function boardTo3D(kingSq){
   const B=$('#board'),br=B.getBoundingClientRect(),sz=br.width/8;
-  const stage=document.createElement('div');stage.style.cssText=`position:fixed;left:${br.left}px;top:${br.top}px;width:${br.width}px;height:${br.height}px;z-index:955;perspective:${br.width*1.4}px;pointer-events:none`;document.body.appendChild(stage);
+  const clip=document.createElement('div');clip.style.cssText='position:fixed;left:0;top:0;width:100%;height:100%;overflow:hidden;z-index:955;pointer-events:none';document.body.appendChild(clip);
+  const stage=document.createElement('div');stage.style.cssText=`position:absolute;left:${br.left}px;top:${br.top}px;width:${br.width}px;height:${br.height}px;perspective:${br.width*1.4}px;pointer-events:none`;clip.appendChild(stage);
   const kc=(()=>{for(let i=0;i<64;i++)if(board.idxToSq(i)===kingSq){const r=board.sqs[i].getBoundingClientRect();return{x:r.left-br.left+sz/2,y:r.top-br.top+sz/2}}return{x:br.width/2,y:br.width/2}})();
   /* copies of every square and piece, so the real board can hide underneath */
   const tiles=[];for(let i=0;i<64;i++){const sqd=board.sqs[i],r=sqd.getBoundingClientRect(),cs=getComputedStyle(sqd);const t=document.createElement('div');
@@ -936,7 +937,7 @@ async function boardTo3D(kingSq){
   await wf.animate([{opacity:0},{opacity:1}],{duration:220,fill:'forwards'}).finished.catch(()=>{});
   /* the flash must not stay on top of the 3D scene (it made the whole screen white) */
   setTimeout(()=>{wf.animate([{opacity:1},{opacity:0}],{duration:500,fill:'forwards'}).finished.catch(()=>{}).then(()=>wf.remove())},400);
-  return()=>{stage.remove();inv.remove();B.style.visibility='';wf.remove()};
+  return()=>{clip.remove();inv.remove();B.style.visibility='';wf.remove()};
 }
 /* how "special" is this checkmate? more unusual mates get the longer, wilder cinematic */
 function mateLevel(g,mv,king,checkers){
@@ -1100,6 +1101,8 @@ const CSS=`
 .wxEv{display:flex;gap:8px;align-items:center;margin:5px 0}
 .wxEv .i{font-size:22px;width:30px;text-align:center}
 .wxLog{max-height:190px;overflow:auto;font-size:13px;line-height:1.55}
+.wxNav{display:flex;align-items:center;gap:6px;margin:2px 0 8px}.wxNav .btn{min-width:38px;padding:4px 8px}.wxNavT{flex:1;text-align:center;font-size:13px;opacity:.8}
+.wxPast{background:rgba(255,213,79,.12);border:1px solid rgba(255,213,79,.5);border-radius:6px;padding:6px 8px;margin-bottom:8px;font-size:13px}
 .wxLog .e{background:rgba(116,155,191,.16);border-left:3px solid #749BBF;padding:3px 7px;margin:4px 0;border-radius:3px}
 .sq .wxCrown{position:absolute;left:20%;top:-12%;width:60%;height:45%;z-index:5;pointer-events:none;filter:drop-shadow(0 1px 1px rgba(0,0,0,.45))}
 .wxFly{position:fixed;z-index:950;pointer-events:none;filter:drop-shadow(0 0 10px rgba(255,210,80,.9))}
@@ -1167,6 +1170,7 @@ function StormRun(opt){
   const gapR=FREQ[opt.freq][1];const gap=()=>gapR[0]+Math.floor(Math.random()*(gapR[1]-gapR[0]+1));
   let nextAt=opt.nextAt||Math.max(6,gap()),upcoming=null;
   const st={fog:0,fogR:null,frozen:{},ufo:null,secret:null,crowns:{...(opt.crowns||{})}};
+  let VW=null,liveLast=null;   /* VW = index in the history while looking at the past (null = the live game) */
   const showQ=opt.showQ!==false&&!opt.gallery;
   const H=[];            /* every move (fen before/after) and every weather event, for the review */
   let RV=null;           /* review state while the post-game review is open */
@@ -1177,7 +1181,7 @@ function StormRun(opt){
   board.targets=function(from){if(st.frozen[from])return[];return Board.prototype.targets.call(this,from)};
   board.render=function(a){Board.prototype.render.call(this,a);decorate()};
   function decorate(){
-    if(RV)return;
+    if(RV||VW!=null)return;
     for(let i=0;i<64;i++){const sq=board.idxToSq(i),d=board.sqs[i];
       if(st.fog>0&&st.fogR&&+sq[1]>=st.fogR[0]&&+sq[1]<=st.fogR[1]){d.classList.add('fogd');d.insertAdjacentHTML('beforeend','<span class="wxFog"></span>')}
       if(st.frozen[sq])d.insertAdjacentHTML('beforeend','<span class="wxIce"></span>');
@@ -1189,7 +1193,7 @@ function StormRun(opt){
     else players(plHtml('Бот: '+L.n,'~'+L.elo,other(human)),plHtml('Ти','',human));
   };
   names();
-  board.canMove=()=>!busy&&!over&&me.alive&&!waitHost&&(opt.mode==='friend'||g.turn()===human);
+  board.canMove=()=>VW==null&&!busy&&!over&&me.alive&&!waitHost&&(opt.mode==='friend'||g.turn()===human);
   board.onMove=(m,noAnim)=>{if(!board.canMove())return;const mv=g.move(m);if(!mv)return;
     if(NETM){netSend({t:'mv',u:mUci(mv)});if(!HOST)waitHost=true}
     afterMove(mv,noAnim)};
@@ -1209,6 +1213,23 @@ function StormRun(opt){
   }
   function sendReady(){if(HOST)netSend({t:'ready',ply,fen:g.fen(),nextAt,upcoming})}
 
+  /* ---- looking back through the game: every move and every weather event is a step ---- */
+  function timeline(){
+    const tl=[];const first=H.find(x=>x.mv);tl.push({fen:first?first.fenB:(H[0]&&H[0].fen)||g.fen(),last:null,label:'Початок партії',h:-1});
+    H.forEach((x,i)=>{if(x.mv){const n=+x.fenB.split(' ')[5];tl.push({fen:x.fenA,last:[x.mv.from,x.mv.to],label:`${x.mv.color==='w'?n+'.':n+'…'} ${x.mv.san}`,h:i})}
+      else if(x.fen)tl.push({fen:x.fen,last:null,label:`${x.i} ${x.note}`,h:i,ev:true})});
+    return tl}
+  function viewAt(i){
+    if(RV)return;const tl=timeline();if(i==null||i>=tl.length-1){exitView();return}i=Math.max(0,i);
+    if(VW==null)liveLast=board.last;VW=i;const e=tl[i];
+    board.g=new Chess(e.fen);board.sel=null;board.last=e.last;board.arrows=[];board.badge=null;board.skipAnim=true;Board.prototype.render.call(board);
+    render();
+  }
+  function exitView(){if(VW==null)return;VW=null;board.g=g;board.sel=null;board.last=liveLast;board.skipAnim=true;board.render();if(!RV)render()}
+  function histStep(d){const tl=timeline();const cur=VW==null?tl.length-1:VW;viewAt(cur+d)}
+  const histKey=e=>{if(RV||!me.alive)return;const t=e.target;if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable))return;
+    if(e.key==='ArrowLeft'){histStep(-1);e.preventDefault()}else if(e.key==='ArrowRight'){histStep(1);e.preventDefault()}else if(e.key==='Escape'&&VW!=null)exitView()};
+  document.addEventListener('keydown',histKey);
   function render(msg){
     if(RV)return;
     const turnTxt=over?'':opt.mode==='friend'?`Хід ${g.turn()==='w'?'білих':'чорних'}`:g.turn()===human?(waitHost?'Синхронізація…':'Твій хід'):NETM?'Хід друга…':'Бот думає…';
@@ -1220,9 +1241,14 @@ function StormRun(opt){
         <div class="small" style="margin-top:6px;opacity:.8">${over?'':left<=1?'⚠ Погода зміниться після наступного ходу!':`Наступна зміна погоди приблизно через ${Math.ceil(left/2)} ${plural(Math.ceil(left/2),'хід','ходи','ходів')}.`}</div></div>
       ${eff.length?`<div class="card small">${eff.join('<br>')}</div>`:''}
       ${st.secret&&st.secret.show?`<div class="card small">👁 <b>Що змінилося:</b> ${PNAME[st.secret.p.type]} ${st.secret.from} → ${st.secret.to}</div>`:''}
-      <div class="card"><h4>${turnTxt||'Партія'}</h4><div class="wxLog" id="wxLog">${log.map(x=>x.e?`<div class="e">${x.e}</div>`:`<span>${x.s} </span>`).join('')||'<span class="dim">Ходів ще немає</span>'}</div></div>`;
+      <div class="card"><h4>${turnTxt||'Партія'}</h4>${(()=>{const tl=timeline();if(tl.length<2)return'';const cur=VW==null?tl.length-1:VW;const e=tl[cur];
+          return`<div class="wxNav"><button class="btn g sm" data-nv="0" title="На початок">⏮</button><button class="btn g sm" data-nv="-1" title="Назад (←)">◀</button><span class="wxNavT">${VW==null?'Зараз':`${cur} / ${tl.length-1}`}</span><button class="btn g sm" data-nv="1" title="Вперед (→)">▶</button><button class="btn sm" data-nv="end" title="До гри">⏭</button></div>
+          ${VW!=null?`<div class="wxPast">${e.ev?'Подія':'Хід'}: <b>${esc(e.label)}</b><div class="small mut">Ти дивишся минуле. Натисни ⏭, щоб повернутися до гри.</div></div>`:''}`})()}
+        <div class="wxLog" id="wxLog">${log.map(x=>{const on=VW!=null&&x.h!=null&&timeline()[VW]&&timeline()[VW].h===x.h;const a=x.h!=null?` data-h="${x.h}" style="cursor:pointer${on?';outline:2px solid #ffd54f;border-radius:3px':''}"`:'';return x.e?`<div class="e"${a}>${x.e}</div>`:`<span${a}>${x.s} </span>`}).join('')||'<span class="dim">Ходів ще немає</span>'}</div></div>`;
     if(msg)coachSay(msg.h,msg.k||'');
-    const lg=$('#wxLog');if(lg)lg.scrollTop=lg.scrollHeight;
+    const lg=$('#wxLog');if(lg){const on=VW!=null&&lg.querySelector('[style*="outline"]');if(on)on.scrollIntoView({block:'nearest'});else lg.scrollTop=lg.scrollHeight}
+    document.querySelectorAll('[data-nv]').forEach(b=>b.onclick=()=>{const v=b.dataset.nv;if(v==='end')exitView();else if(v==='0')viewAt(0);else histStep(+v)});
+    document.querySelectorAll('#wxLog [data-h]').forEach(el=>el.onclick=()=>{const h=+el.dataset.h;const tl=timeline();const i=tl.findIndex(e=>e.h===h);if(i>=0)viewAt(i)});
     foot();
   }
   function foot(){
@@ -1257,9 +1283,9 @@ function StormRun(opt){
     render({h,k:winner===human||!winner?'good':'bad'});
   }
   async function afterMove(mv,noAnim){
-    busy=true;
+    if(VW!=null)exitView();busy=true;
     {const fenA=g.fen();g.undo();const fenB=g.fen();g.move({from:mv.from,to:mv.to,promotion:mv.promotion});const h={fenB,fenA,mv};H.push(h);if(showQ)liveRate(h)}
-    {const n=+g.fen().split(' ')[5];log.push({s:(mv.color==='w'?n+'.':(n-1)+'…')+' '+mv.san})}
+    {const n=+g.fen().split(' ')[5];log.push({s:(mv.color==='w'?n+'.':(n-1)+'…')+' '+mv.san,h:H.length-1})}
     if(st.frozen[mv.to])delete st.frozen[mv.to];
     /* crowns follow their piece; a captured crown goes to the capturer */
     const capSq=mv.flags.includes('e')?mv.to[0]+mv.from[1]:mv.captured?mv.to:null;
@@ -1312,7 +1338,7 @@ function StormRun(opt){
     await showEvent(k,res,fogR);
   }
   async function showEvent(k,res,fogR){
-    if(!me.alive)return;busy=true;const ev=EVENTS[k];
+    if(!me.alive)return;if(VW!=null)exitView();busy=true;const ev=EVENTS[k];
     const fen=g.fen();const map0=mapOf(g);const turn=g.turn();
     const fogZ=fogR?[W3flipZ(fogR[0]),W3flipZ(fogR[1])]:null;
     const X={turn,fen,human};
@@ -1339,7 +1365,7 @@ function StormRun(opt){
     apply();
     board.render();
     if(k!=='ufoBack'){S.storm.seen[k]=(S.storm.seen[k]||0)+1;save()}
-    log.push({e:`${ev.i} ${esc(res.note)}`});H.push({ev:k,i:ev.i,note:res.note,fen:g.fen()});
+    log.push({e:`${ev.i} ${esc(res.note)}`,h:H.length});H.push({ev:k,i:ev.i,note:res.note,fen:g.fen()});
     render({h:`${ev.i} <b>${ev.n}</b><br>${esc(res.note)}`,k:res.miss?'':'warn'});
     if(checkOver())return;
     if(g.in_check())snd&&snd('check');
@@ -1488,10 +1514,10 @@ function StormRun(opt){
 
   /* ---- live events: they start, then run on their own for ~10 s while the game goes on ---- */
   async function startLive(k){
-    const ev=EVENTS[k];busy=true;
+    if(VW!=null)exitView();const ev=EVENTS[k];busy=true;
     {const r0=$('#board').getBoundingClientRect();if(r0.top<0||r0.bottom>innerHeight){$('#board').scrollIntoView({block:'center'});await sleep(250)}}
     S.storm.seen[k]=(S.storm.seen[k]||0)+1;save();
-    log.push({e:`${ev.i} ${esc(ev.n)}`});H.push({ev:k,i:ev.i,note:ev.n,fen:g.fen()});
+    log.push({e:`${ev.i} ${esc(ev.n)}`,h:H.length});H.push({ev:k,i:ev.i,note:ev.n,fen:g.fen()});
     render({h:`${ev.i} <b>${ev.n}</b><br>${esc(ev.d)}`,k:'warn'});
     const A=liveApi(k);st.live=A;
     ev.run(A).catch(e=>console.warn('live',e)).finally(()=>{A.cleanup();if(st.live===A)st.live=null;if(me.alive&&!over){board.render();if(!busy)render()}});
@@ -1512,12 +1538,12 @@ function StormRun(opt){
       threat(list){st.threat=list&&list.length?list:null},
       stopProp(el){['pointerdown','mousedown','touchstart','click'].forEach(t=>el.addEventListener(t,e=>e.stopPropagation()))},
       say(h){if(me.alive&&!over&&!RV)render({h:`${ev.i} <b>${ev.n}</b><br>${h}`,k:'warn'})},
-      log(note){if(!note)return;log.push({e:`${ev.i} ${esc(note)}`});H.push({ev:k,i:ev.i,note,fen:g.fen()})},
+      log(note){if(!note)return;if(VW!=null)exitView();log.push({e:`${ev.i} ${esc(note)}`,h:H.length});H.push({ev:k,i:ev.i,note,fen:g.fen()})},
       banner(title,sub){if(!A.alive())return Promise.resolve();const K=fxLayer();fxBanner(K,{icon:ev.i,title,sub,col:'#ff4d6d',dur:1300});return K.finish()},
       flash(sq,col){const e=sqEl(sq);if(!e)return;const d=document.createElement('div');d.style.cssText=`position:absolute;inset:0;background:${col};pointer-events:none;z-index:5`;e.appendChild(d);d.animate([{opacity:.85},{opacity:0}],{duration:700,fill:'forwards'});setTimeout(()=>d.remove(),720)},
       shake(px){B.animate([{transform:'translate(0,0)'},{transform:`translate(${px}px,${-px/2}px)`},{transform:`translate(${-px}px,${px/2}px)`},{transform:'translate(0,0)'}],{duration:180})},
       set(m,ch,note){
-        if(!A.alive())return false;const fen=valid(m,g.turn(),g.fen());if(!fen)return false;
+        if(!A.alive())return false;const fen=valid(m,g.turn(),g.fen());if(!fen)return false;if(VW!=null)exitView();
         g=new Chess(fen);
         for(const c of ch){if(c.t==='kill'){delete st.frozen[c.sq];delete st.crowns[c.sq]}
           if(c.t==='move'){if(st.frozen[c.from]){st.frozen[c.to]=st.frozen[c.from];delete st.frozen[c.from]}if(st.crowns[c.from]){st.crowns[c.to]=1;delete st.crowns[c.from]}}}
@@ -1554,7 +1580,7 @@ function StormRun(opt){
     afterMove(mv);
   }
   me._ev=(k,p)=>{if(busy||over||(NETM&&!HOST))return'busy';runEvent(k,{ufoP:p||{type:'n',color:'w'}}).then(()=>{busy=false;render();sendReady();if(opt.mode==='bot'&&g.turn()!==human&&!over)botMove()});return'ok'};
-  function stop(keepNet){me.alive=false;if(st.live){try{st.live.cleanup()}catch(e){}st.live=null}$('#evalbar').style.visibility='';if(RV&&RV.back){const b=RV.back;RV=null;try{b()}catch(e){}}delete board.targets;delete board.render;$('#board').style.visibility='';board.arrows=[];
+  function stop(keepNet){me.alive=false;document.removeEventListener('keydown',histKey);if(st.live){try{st.live.cleanup()}catch(e){}st.live=null}$('#evalbar').style.visibility='';if(RV&&RV.back){const b=RV.back;RV=null;try{b()}catch(e){}}delete board.targets;delete board.render;$('#board').style.visibility='';board.arrows=[];
     if(W3.on){W3.speed=20}
     if(NETM&&!keepNet){netSend({t:'bye'});netClose()}}
 

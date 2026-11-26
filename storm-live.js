@@ -69,26 +69,26 @@ function putBack(A,from,p){const m=A.map();const order=[from,...ALL.filter(s=>s!
 return{
 /* 1 ─ the dinosaur hunts the nearest piece */
 dino:{i:'🦖',n:'Динозавр',rar:'r',live:true,omen:'🌿 Земля здригається від важких кроків…',
-  d:'Динозавр ходить по клітинках 10 секунд і йде до найближчої фігури. Не встиг відвести її — зʼїсть. Встиг — він піде до іншої. Короля не чіпає.',
+  d:'Динозавр цілу хвилину повільно ходить по клітинках і йде до найближчої фігури. Не встиг відвести її — зʼїсть. Встиг — він піде до іншої. Короля не чіпає.',
   async run(A){
     const s0=A.sz();const W=()=>A.sz()*1.3;const d=mk(A.lay,`width:${W()}px;height:${W()*.8}px;z-index:6;filter:drop-shadow(0 5px 4px rgba(0,0,0,.55));transition:transform .2s`,DINO);
     const mark=mk(A.lay,'opacity:0');mark.className='wxDanger';
     const edge=rnd([[0,rnd([2,3,4,5])],[7,rnd([2,3,4,5])],[rnd([2,3,4,5]),0],[rnd([2,3,4,5]),7]]);let pos=sqN(edge[0],edge[1]);
     let c=A.center(pos);const off={x:c.x+(edge[0]===0?-W():edge[0]===7?W():0),y:c.y+(edge[1]===0?W():edge[1]===7?-W():0)};
-    place(d,off,W(),W()*.8);snd.roar();await A.banner('Динозавр!','Відводь фігури, до яких він іде');
+    place(d,off,W(),W()*.8);snd.roar();await A.banner('Динозавр!','Ціла хвилина: відводь фігури, до яких він іде');
     await glide(d,off.x-W()/2,off.y-W()*.4,c.x-W()/2,c.y-W()*.55,700,{hop:s0*.15});snd.thud(.35);
     const T0=now();let eaten=0;
-    while(A.alive()&&now()-T0<10500){
+    while(A.alive()&&now()-T0<60000){
       const m=A.map();const tg=Object.keys(m).filter(s=>m[s].type!=='k');if(!tg.length)break;
       tg.sort((a,b)=>cheb(a,pos)-cheb(b,pos)||manh(a,pos)-manh(b,pos)||Math.random()-.5);const t=tg[0];A.threat([t]);
       const tc=A.center(t),sz=A.sz();Object.assign(mark.style,{left:(tc.x-sz/2)+'px',top:(tc.y-sz/2)+'px',width:sz+'px',height:sz+'px',opacity:1});
       if(t===pos){d.style.transform='scale(1.25) rotate(-8deg)';snd.chomp();const p=m[t];
         const ok=A.kill(t,`Динозавр зʼїв ${colName(p.color)} ${PACC[p.type]} на ${t}.`);await sleep(250);d.style.transform='';
         if(ok){eaten++;A.flash(t,'#ff1744')}else{snd.squeak();const n=near(pos).filter(s=>!m[s]);if(n.length)pos=rnd(n)}
-        await sleep(450);c=A.center(pos);await glide(d,parseFloat(d.style.left),parseFloat(d.style.top),c.x-W()/2,c.y-W()*.55,450,{hop:sz*.1});continue}
+        await sleep(1350);c=A.center(pos);await glide(d,parseFloat(d.style.left),parseFloat(d.style.top),c.x-W()/2,c.y-W()*.55,1350,{hop:sz*.1});continue}
       const[pf,pr]=fr(pos),[tf,tr]=fr(t);const nx=sqN(pf+Math.sign(tf-pf),pr+Math.sign(tr-pr));
       const a=A.center(pos),b=A.center(nx);d.querySelector('svg').style.transform=b.x<a.x-1?'scaleX(-1)':b.x>a.x+1?'':d.querySelector('svg').style.transform;
-      pos=nx;await glide(d,a.x-W()/2,a.y-W()*.55,b.x-W()/2,b.y-W()*.55,620,{hop:sz*.12});snd.thud();A.shake(2);await sleep(130)}
+      pos=nx;await glide(d,a.x-W()/2,a.y-W()*.55,b.x-W()/2,b.y-W()*.55,1860,{hop:sz*.12});snd.thud();A.shake(2);await sleep(390)}
     A.threat(null);mark.remove();snd.roar();
     if(A.alive()){const a=A.center(pos),sz=A.sz();const ex=a.x<sz*4?-W()*1.5:sz*8+W()*.5;await glide(d,a.x-W()/2,a.y-W()*.55,ex,a.y-W()*.55,1200,{hop:sz*.2})}
     if(!eaten)A.say('Ти встиг відвести всі фігури. Динозавр пішов голодним!')}},
