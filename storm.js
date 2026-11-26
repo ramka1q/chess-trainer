@@ -879,7 +879,7 @@ async function playCastle(I){
   const K=fxLayer();const{A,el,sz,W}=K;const GOLD='#FFD54F',CY='#80DEEA';
   MUS.arp([523,659,784,1047,784,659],.08,0,'triangle',.06);MUS.choir([261.6,329.6,392],2.2,0,.025);
   fxVignette(K,2200,.6);
-  const circ=(c,col,d)=>{const o=el('wxFx',`<svg viewBox="-50 -50 100 100" width="${sz*1.9}" height="${sz*1.9}"><circle r="46" fill="none" stroke="${col}" stroke-width="2.5"/><circle r="36" fill="none" stroke="${col}" stroke-width="1" stroke-dasharray="4 4"/><polygon points="0,-40 34.6,20 -34.6,20" fill="none" stroke="${col}" stroke-width="1.6"/><polygon points="0,40 34.6,-20 -34.6,-20" fill="none" stroke="${col}" stroke-width="1.6"/></svg>`,`left:${c.x-sz*.95}px;top:${c.y-sz*.95}px;filter:drop-shadow(0 0 8px ${col})`);
+  const circ=(c,col,d)=>{const o=el('wxFx',`<svg viewBox="-50 -50 100 100" width="${sz*1.9}" height="${sz*1.9}"><circle r="46" fill="none" stroke="${col}" stroke-width="2.5"/><circle r="36" fill="none" stroke="${col}" stroke-width="1" stroke-dasharray="4 4"/><g transform="rotate(45)"><rect x="-20" y="-20" width="40" height="40" fill="none" stroke="${col}" stroke-width="1.6"/>${[0,1,2,3].map(i=>[0,1,2,3].filter(j=>(i+j)%2===0).map(j=>`<rect x="${-20+i*10}" y="${-20+j*10}" width="10" height="10" fill="${col}" opacity=".45"/>`).join('')).join('')}</g></svg>`,`left:${c.x-sz*.95}px;top:${c.y-sz*.95}px;filter:drop-shadow(0 0 8px ${col})`);
     A(o,[{transform:'scale(0) rotate(0)',opacity:0},{transform:'scale(1) rotate(120deg)',opacity:1,offset:.25},{transform:'scale(1) rotate(300deg)',opacity:1,offset:.8},{transform:'scale(1.4) rotate(360deg)',opacity:0}],{duration:2000,delay:d,easing:'linear'})};
   const k0=K.center(I.kFrom),k1=K.center(I.kTo),r0=K.center(I.rFrom),r1=K.center(I.rTo);
   circ(k0,GOLD,0);circ(r0,CY,120);circ(k1,GOLD,700);circ(r1,CY,800);
@@ -1344,6 +1344,11 @@ function StormRun(opt){
       /* only checkmate gets an animation; an ordinary check plays nothing */
       if(g.in_checkmate()){const king=board.kingSq(g.turn());const checkers=attackersOf(g,king,mv.color);
         const info={color:mv.color,piece:mv.promotion||mv.piece,from:mv.from,to:mv.to,king,checkers,disc:!checkers.some(c=>c.sq===mv.to),dbl:checkers.length>1,mate:g.in_checkmate(),variant:window.CHK_VARIANT};window.CHK_VARIANT=null;
+        /* a rare, beautiful mate earns one of the five 2-minute legendary films */
+        const lg=info.mate&&window.legendFor?window.legendFor({g,mv,king,checkers}):null;
+        if(lg&&window.playLegend){let ok=false;
+          try{await window.playLegend({id:lg,color:mv.color,piece:info.piece,kingColor:g.turn(),fen:g.fen(),kingSq:king,checkers:checkers.map(c=>c.type)});ok=true}catch(e){console.warn('legend failed',e)}
+          if(ok){S.storm.legends=S.storm.legends||{};const first=!S.storm.legends[lg];S.storm.legends[lg]=(S.storm.legends[lg]||0)+1;save();const L=(window.LEGENDS||[]).find(x=>x.id===lg);if(first&&L)toast(`🏆 Новий легендарний мат: ${L.n}!`,4500);return}}
         if(info.mate&&window.playCinema){
           /* checkmate: the board breaks into a 3D cinematic; harder mates get the longer version */
           const level=mateLevel(g,mv,king,checkers);let back=null;
@@ -1518,12 +1523,14 @@ window.viewStorm=function(){
       <div class="card"><h4>Як часто змінюється погода</h4><div class="chips">${Object.entries(FREQ).map(([k,[n,r]])=>`<button class="chip ${freq===k?'on':''}" data-f="${k}">${n}</button>`).join('')}</div>
         <div class="small mut" style="margin-top:6px">${FREQ[freq][1][0]===FREQ[freq][1][1]?`Рівно кожні ${FREQ[freq][1][0]/2} ходів.`:`Приблизно кожні ${Math.round(FREQ[freq][1][0]/2)}–${Math.round(FREQ[freq][1][1]/2)} ходів.`}</div></div>
       <div class="card"><label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer"><input type="checkbox" id="wxQ" ${showQ?'checked':''} style="margin-top:3px"><span><b>📊 Показувати оцінку ходів під час гри</b><div class="small mut">Значки (!!, ★, ?, ??) на кожному ході й смужка переваги збоку.${mode==='net'?' Обираєш ти як господар: у друга буде так само.':''} Розбір партії після гри доступний завжди.</div></span></label></div>
+      <div class="card"><h4>🏆 Легендарні мати <span class="small dim">${Object.keys(S.storm.legends||{}).length}/5</span></h4><div class="small mut" style="margin-bottom:6px">Дуже рідкісні красиві мати відкривають двохвилинне 3D-кіно. Кожен вид мату має свій фільм.</div>${(window.LEGENDS||[]).map(l=>{const n=(S.storm.legends||{})[l.id];return`<div class="wxEv" style="${n?'':'opacity:.8'}"><span class="i">${n?l.i:'🔒'}</span><div style="flex:1"><b>${n?l.n:'???'}</b>${n?` <span class="small dim">×${n}</span>`:''}<div class="small mut">${l.hint}</div></div>${n?`<button class="btn sm g" data-lg="${l.id}">▶</button>`:''}</div>`}).join('')}</div>
       <div class="card"><h4>📖 Можлива погода</h4>${POOL.map(k=>`<div class="wxEv" style="${seen[k]?'':'opacity:.75'}"><span class="i">${EVENTS[k].i}</span><div style="flex:1"><b>${EVENTS[k].n}</b> <span class="tag" style="background:${RAR[EVENTS[k].rar].col};color:#111">${RAR[EVENTS[k].rar].n}</span>${seen[k]?` <span class="small dim">бачив ×${seen[k]}</span>`:''}<div class="small mut">${EVENTS[k].d}</div></div></div>`).join('')}</div>`,
       mode==='net'?`<button class="btn" id="wxInvite">🔗 Створити запрошення</button>`:`<button class="btn" id="wxStart">🌪 Грати</button>`);
     coachSay('Звичайні шахи на звичайній дошці. Але раз на кілька ходів камера відривається від дошки, фігури встають, і за вікном щось починається. Перед кожною партією по радіо дають прогноз: 4 види погоди, які можуть трапитися.');
     document.querySelectorAll('[data-m]').forEach(e=>e.onclick=()=>{mode=e.dataset.m;S.stormMode=mode;save();players(plHtml(mode==='bot'?'Бот':'Друг','','b'),plHtml('Ти','','w'));ui()});
     document.querySelectorAll('[data-lv]').forEach(e=>e.onclick=()=>{lvl=+e.dataset.lv;ui()});
     document.querySelectorAll('[data-c]').forEach(e=>e.onclick=()=>{col=e.dataset.c;ui()});
+    document.querySelectorAll('[data-lg]').forEach(e=>e.onclick=()=>playLegendDemo(e.dataset.lg));
     document.querySelectorAll('[data-f]').forEach(e=>e.onclick=()=>{freq=e.dataset.f;S.stormFreq=freq;save();ui()});
     $('#wxQ').onchange=e=>{showQ=e.target.checked;S.stormQ=showQ;save()};
     if($('#wxAF'))$('#wxAF').onchange=e=>{autoFlip=e.target.checked;S.stormFlip=autoFlip;save()};
@@ -1585,6 +1592,7 @@ function galleryPick(){
     <h4 style="margin:4px 0 6px">💥 Взяття ферзя</h4><div class="list">${caps.map(p=>`<div class="it" data-gq="${p}"><img src="${PIC('w',p)}" width="28"><span class="nm">${QCAP[p].n}</span><span class="tag" style="background:var(--gold);color:#111">${'★'.repeat(QTIER[p])}${'☆'.repeat(4-QTIER[p])}</span></div>`).join('')}</div>
     <h4 style="margin:12px 0 6px">⚔️ Мат, рокіровка, перетворення</h4><div class="list">${CHKDEMO.map((d,i)=>`<div class="it" data-gx="${i}"><img src="${PIC('w',d.img)}" width="28"><span class="nm">${d.n}</span></div>`).join('')}</div>
     <h4 style="margin:12px 0 6px">🎬 3D-кіно мату</h4><div class="list">${(window.CINEMA_SCENES||[]).map((n,i)=>`<div class="it" data-gm="${i}"><span style="font-size:20px;width:28px;text-align:center">🎬</span><span class="nm">${i+1}. ${n}</span><span class="tag">${i<3?'~12 с':i<7?'~18 с':'~30 с'}</span></div>`).join('')}</div>
+    <h4 style="margin:12px 0 6px">🏆 Легендарні мати (~2 хв)</h4><div class="list">${(window.LEGENDS||[]).map(l=>`<div class="it" data-gl="${l.id}"><span style="font-size:20px;width:28px;text-align:center">${l.i}</span><span class="nm">${l.n}</span><span class="tag">2 хв</span></div>`).join('')}</div>
     <h4 style="margin:12px 0 6px">👑 Корона</h4><div class="list"><div class="it" data-gc="1"><img src="${CROWN_SVG}" width="28"><span class="nm">Хтось збиває пішака з короною і забирає її</span></div></div>
     <h4 style="margin:12px 0 6px">🌪 Погода</h4><div class="list">${list.map(k=>`<div class="it" data-gk="${k}"><span style="font-size:22px;width:30px;text-align:center">${EVENTS[k].i}</span><span class="nm">${EVENTS[k].n}${k==='ufoBack'?' (повернення)':''}</span><span class="tag" style="background:${RAR[EVENTS[k].rar].col};color:#111">${RAR[EVENTS[k].rar].n}</span></div>`).join('')}</div></div>
     <label class="small" style="display:flex;gap:6px;margin-top:10px;cursor:pointer;text-align:left"><input type="checkbox" id="galFull" ${GAL_FULL?'checked':''}> 🐢 Погода: повна повільна версія (у грі вона коротка, ~1 сек)</label>
@@ -1593,8 +1601,15 @@ function galleryPick(){
   document.querySelectorAll('[data-gk]').forEach(e=>e.onclick=()=>{closeModal();galleryRun(GAL_FEN,r=>r._ev(e.dataset.gk,{type:'b',color:'b'}))});
   document.querySelectorAll('[data-gq]').forEach(e=>e.onclick=()=>{closeModal();const d=CAPDEMO[e.dataset.gq];galleryRun(d.fen,r=>r._mv(d.m[0],d.m[1]))});
   document.querySelectorAll('[data-gm]').forEach(e=>e.onclick=async()=>{closeModal();let back=null;try{back=await boardTo3D(board.kingSq('b')||'e8');await window.playCinema({color:'w',piece:'q',kingColor:'b',scene:+e.dataset.gm})}catch(err){console.warn(err)}back&&back()});
+  document.querySelectorAll('[data-gl]').forEach(e=>e.onclick=()=>{closeModal();playLegendDemo(e.dataset.gl)});
   document.querySelectorAll('[data-gx]').forEach(e=>e.onclick=ev=>{ev.stopPropagation();closeModal();const d=CHKDEMO[+e.dataset.gx];window.CHK_VARIANT=e.dataset.gv!=null?+e.dataset.gv:null;galleryRun(d.fen,r=>r._mv(d.m[0],d.m[1]))});
   document.querySelectorAll('[data-gc]').forEach(e=>e.onclick=()=>{closeModal();galleryRun('4k3/pp4pp/4p3/3P4/8/8/PP4PP/4K3 b - - 0 1',r=>r._mv('e6','d5'),{d5:1})});
+}
+/* plays a legendary film on the board that is on screen (gallery, or a replay of an unlocked one) */
+const LEGEND_DEMO={jurassic:'n',rocket:'q',volcano:'r',ghosts:'q',studio:'r'};
+async function playLegendDemo(id){
+  if(!window.playLegend)return;const fen='2r3k1/pp3ppp/2n5/8/3N4/2P5/P4PPP/R1B3K1 w - - 0 1';
+  try{await window.playLegend({id,color:'w',piece:LEGEND_DEMO[id]||'q',kingColor:'b',fen,kingSq:board.kingSq('b')||'e8',checkers:id==='volcano'?['r','b']:[LEGEND_DEMO[id]||'q']})}catch(e){console.warn(e);toast('Не вдалося запустити анімацію')}
 }
 function galleryRun(fen,act,crowns){
   if(CUR&&CUR.busy&&CUR.busy()){toast('Зачекай, поки закінчиться поточна анімація');return}

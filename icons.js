@@ -134,6 +134,8 @@ const E={
  '💬':`<path d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-9l-5 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" fill="#ECEFF1"/><g ${NS}>${C(8,10.5,1.2,'#78909C')}${C(12,10.5,1.2,'#78909C')}${C(16,10.5,1.2,'#78909C')}</g>`,
  '🏹':`<path d="M5 3c8 2 14 8 16 16" fill="none" stroke="#8D6E63" stroke-width="2.4"/><path d="M5 3l16 16" fill="none" stroke="#CFD8DC"/><path d="M3 21L17 7" fill="none" stroke-width="1.6"/><path d="M17 7l1-3 2 2zM3 21l1.5-3.5L6.5 19z" fill="#E53935"/>`,
  '🍃':`<path d="M4 20C4 10 10 4 20 4c0 10-6 16-16 16z" fill="#66BB6A"/><path d="M4 20L15 9" fill="none"/>`,
+ '🦖':`<path d="M3 20l2-6c1-3 3-4 5-4h3l1-4c.5-2 2-3 4-3h2c1 0 2 1 2 2v1l-3 1 2 1v2h-4l-1 4c-.5 2-2 3-4 3l1 3h-2l-1-2-2 0-1 2H6l1-3c-1 0-2 0-2 1z" fill="#558B2F"/>${C(18,5.5,.9,'#fff',NS)}`,
+ '👻':`<path d="M5 21V10a7 7 0 0114 0v11l-2.3-2-2.4 2-2.3-2-2.3 2-2.4-2z" fill="#E3F2FD"/>${C(9.5,10.5,1.4,'#263238',NS)}${C(14.5,10.5,1.4,'#263238',NS)}<ellipse cx="12" cy="15" rx="1.6" ry="2" fill="#263238"/>`,
  '🌋':`<path d="M10 7c-1-2 0-4 2-4.5 2 .5 3 2.5 2 4.5" fill="#B0BEC5"/><path d="M2 21l6.5-11h7L22 21z" fill="#795548"/><path d="M8.5 10h7l-1.5 2.5-2-1-2 1z" fill="#FF7043"/>`,
  '☕':`<path d="M8 6c-.6-1 .6-2 0-3M12 6c-.6-1 .6-2 0-3" fill="none" stroke="#B0BEC5"/><path d="M17 11h1.5a2.5 2.5 0 0 1 0 5H17" fill="none" stroke-width="2"/><path d="M4 9h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" fill="#ECEFF1"/><rect x="5.5" y="9.5" width="10" height="2" fill="#6D4C41" ${NS}/>`,
  '🌈':`<g fill="none" stroke-width="2.2"><path d="M2.5 19a9.5 9.5 0 0 1 19 0" stroke="#E53935"/><path d="M5 19a7 7 0 0 1 14 0" stroke="#FDD835"/><path d="M7.5 19a4.5 4.5 0 0 1 9 0" stroke="#43A047"/><path d="M10 19a2 2 0 0 1 4 0" stroke="#1E88E5"/></g>`,

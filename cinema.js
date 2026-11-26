@@ -40,10 +40,12 @@ function score(M,{dur,root=55,minor=true,bpm=100,climax,bells=0,extra}){
 /* ---------------- textures drawn in code ---------------- */
 const tex={};
 function glowTex(T){if(tex.g)return tex.g;const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d');const g=x.createRadialGradient(64,64,0,64,64,64);g.addColorStop(0,'rgba(255,255,255,1)');g.addColorStop(.25,'rgba(255,255,255,.6)');g.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=g;x.fillRect(0,0,128,128);return tex.g=new T.CanvasTexture(c)}
-function runeTex(T,col){const c=document.createElement('canvas');c.width=c.height=512;const x=c.getContext('2d');x.translate(256,256);x.strokeStyle=col;x.fillStyle=col;x.shadowColor=col;x.shadowBlur=14;
-  [240,200,120].forEach((r,i)=>{x.lineWidth=i===1?2:4;x.setLineDash(i===1?[10,14]:[]);x.beginPath();x.arc(0,0,r,0,Math.PI*2);x.stroke()});x.setLineDash([]);
-  x.lineWidth=3;for(let k=0;k<2;k++){x.beginPath();for(let i=0;i<=3;i++){const a=(i/3)*Math.PI*2+k*Math.PI/3-Math.PI/2;const px=Math.cos(a)*190,py=Math.sin(a)*190;i?x.lineTo(px,py):x.moveTo(px,py)}x.stroke()}
-  x.font='bold 30px serif';x.textAlign='center';x.textBaseline='middle';const g='♔♕♖♗♘♙♚♛♜♝♞♟';for(let i=0;i<24;i++){const a=i/24*Math.PI*2;x.save();x.rotate(a);x.fillText(g[i%12],0,-220);x.restore()}
+function runeTex(T,col){ /* a chess-themed magic circle: rings, a diamond 8×8 board, chess symbols, compass ticks (no stars) */
+  const c=document.createElement('canvas');c.width=c.height=512;const x=c.getContext('2d');x.translate(256,256);x.strokeStyle=col;x.fillStyle=col;x.shadowColor=col;x.shadowBlur=14;
+  [244,206,150].forEach((r,i)=>{x.lineWidth=i===1?2:4;x.setLineDash(i===1?[10,12]:[]);x.beginPath();x.arc(0,0,r,0,Math.PI*2);x.stroke()});x.setLineDash([]);
+  x.lineWidth=2;for(let i=0;i<48;i++){const a=i/48*Math.PI*2,r0=i%4?232:222;x.beginPath();x.moveTo(Math.cos(a)*r0,Math.sin(a)*r0);x.lineTo(Math.cos(a)*244,Math.sin(a)*244);x.stroke()}
+  x.save();x.rotate(Math.PI/4);const q=13;for(let i=0;i<8;i++)for(let j=0;j<8;j++){if((i+j)%2)continue;x.globalAlpha=.55;x.fillRect(-52+i*q,-52+j*q,q,q)}x.globalAlpha=1;x.lineWidth=3;x.strokeRect(-52,-52,104,104);x.restore();
+  x.font='bold 30px serif';x.textAlign='center';x.textBaseline='middle';const g='♔♕♖♗♘♙♚♛♜♝♞♟';for(let i=0;i<24;i++){const a=i/24*Math.PI*2;x.save();x.rotate(a);x.fillText(g[i%12],0,-178);x.restore()}
   return new T.CanvasTexture(c)}
 function checkerTex(T,a,b,line){const c=document.createElement('canvas');c.width=c.height=512;const x=c.getContext('2d');for(let i=0;i<8;i++)for(let j=0;j<8;j++){x.fillStyle=(i+j)%2?a:b;x.fillRect(i*64,j*64,64,64)}x.strokeStyle=line;x.lineWidth=2;x.shadowColor=line;x.shadowBlur=8;for(let i=0;i<=8;i++){x.beginPath();x.moveTo(i*64,0);x.lineTo(i*64,512);x.stroke();x.beginPath();x.moveTo(0,i*64);x.lineTo(512,i*64);x.stroke()}const t=new T.CanvasTexture(c);t.wrapS=t.wrapT=T.RepeatWrapping;return t}
 function pieceTex(T,src){return new Promise(res=>{const im=new Image();im.onload=()=>{const c=document.createElement('canvas');c.width=c.height=256;c.getContext('2d').drawImage(im,0,0,256,256);res(new T.CanvasTexture(c))};im.onerror=()=>res(null);im.src=src})}
@@ -54,17 +56,21 @@ async function engine(I,sceneFn){
   const speed=I.speed||1;
   const cv=document.createElement('canvas');cv.id='cineCv';cv.style.cssText='position:fixed;inset:0;z-index:980;width:100vw;height:100vh;background:#000';document.body.appendChild(cv);
   const ui=document.createElement('button');ui.textContent='⏭';ui.title='Пропустити';ui.style.cssText='position:fixed;right:16px;bottom:16px;z-index:992;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:50%;width:48px;height:48px;font-size:20px;cursor:pointer';document.body.appendChild(ui);
-  const white=document.createElement('div');white.style.cssText='position:fixed;inset:0;z-index:991;background:#fff;opacity:1;pointer-events:none;transition:opacity .9s';document.body.appendChild(white);
-  requestAnimationFrame(()=>requestAnimationFrame(()=>white.style.opacity=0));
+  const white=document.createElement('div');white.style.cssText=`position:fixed;inset:0;z-index:991;background:${I.veil||'#fff'};opacity:1;pointer-events:none;transition:opacity ${I.veilIn||.9}s`;document.body.appendChild(white);
   const R=new T.WebGLRenderer({canvas:cv,antialias:!LOWC,powerPreference:'high-performance'});R.setPixelRatio(Math.min(devicePixelRatio||1,LOWC?1:1.5));
   const scene=new T.Scene();scene.background=new T.Color(0x020006);scene.fog=new T.FogExp2(0x05010d,.045);
   const cam=new T.PerspectiveCamera(50,1,.05,500);
   const resize=()=>{R.setSize(innerWidth,innerHeight,false);cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix()};resize();addEventListener('resize',resize);
   const ADD=T.AdditiveBlending,G=glowTex(T);
   const [atkTex,kingTex]=await Promise.all([pieceTex(T,PIC(I.color,I.piece)),pieceTex(T,PIC(I.kingColor,'k'))]);
-  const C={T,scene,cam,R,G,ADD,atkTex,kingTex,LOW:LOWC,BLUE:new T.Color(0x4fc3f7),RED:new T.Color(0xff1744),VIO:new T.Color(0xb388ff),GOLD:new T.Color(0xffd54f),WHITE:new T.Color(0xffffff)};
+  /* every piece picture (the long films use whole armies) */
+  const pt={};await Promise.all(['w','b'].flatMap(c=>['p','n','b','r','q','k'].map(async p=>{pt[c+p]=await pieceTex(T,PIC(c,p))})));
+  const C={T,scene,cam,R,G,ADD,atkTex,kingTex,pt,I,canvas:cv,skipBtn:ui,veil:white,LOW:LOWC,BLUE:new T.Color(0x4fc3f7),RED:new T.Color(0xff1744),VIO:new T.Color(0xb388ff),GOLD:new T.Color(0xffd54f),WHITE:new T.Color(0xffffff)};
   const add=o=>{scene.add(o);return o};C.add=add;
-  const ups=[],bills=[];C.every=f=>ups.push(f);
+  const ups=[],bills=[];C.every=f=>ups.push(f);C.bills=bills;
+  const endFns=[];C.onEnd=f=>endFns.push(f);
+  /* timed events: C.at(time, fn) fires once when the (scene) clock passes time */
+  const evq=[];C.at=(t,f)=>{evq.push({t,f});evq.sort((a,b)=>a.t-b.t)};
   const fired=new Set();C.once=(id,f)=>{if(!fired.has(id)){fired.add(id);f()}};
   C.lerp=(a,b,k)=>a+(b-a)*k;C.clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));C.ease=k=>k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;C.V=(x,y,z)=>new T.Vector3(x,y,z);
   C.shake=0;
@@ -91,23 +97,59 @@ async function engine(I,sceneFn){
   C.setBeam=(b,a,c,op)=>{const d=new T.Vector3().subVectors(c,a);const len=Math.max(.001,d.length());[b.m,b.core].forEach(x=>{x.position.copy(a).addScaledVector(d,.5);x.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),d.clone().normalize());x.scale.set(1,len,1)});b.m.material.opacity=op;b.core.material.opacity=op};
   const slashes=[];C.slash=(p,col=0xffffff)=>{let s=slashes.find(x=>x.material.opacity<=0);if(!s){s=add(new T.Mesh(new T.PlaneGeometry(3.4,.07),new T.MeshBasicMaterial({color:col,transparent:true,opacity:0,blending:ADD,depthWrite:false,side:T.DoubleSide})));slashes.push(s)}s.material.color.set(col);s.position.copy(p);s.quaternion.copy(cam.quaternion);s.rotateZ(Math.random()*Math.PI);s.material.opacity=1};
   C.rune=(col,size,x,z)=>{const m=add(new T.Mesh(new T.PlaneGeometry(size,size),new T.MeshBasicMaterial({map:runeTex(T,col),transparent:true,blending:ADD,depthWrite:false,opacity:0})));m.rotation.x=-Math.PI/2;m.position.set(x,.03,z);return m};
-  C.floor=(col=0x07030d,map=null,size=120)=>{const m=add(new T.Mesh(new T.CircleGeometry(size,64),new T.MeshBasicMaterial({color:col,map})));m.rotation.x=-Math.PI/2;return m};
+  C.floor=(col=0x07030d,map=null,size=120)=>{const m=add(new T.Mesh(new T.CircleGeometry(size,64),new T.MeshBasicMaterial({color:map?0xffffff:col,map})));m.rotation.x=-Math.PI/2;return m};
   /* the king breaks into pieces of its own picture */
   C.shatter=(ch,dir=1)=>{const n=LOWC?12:25;ch.m.visible=false;if(ch.rim)ch.rim.visible=false;ch.glow.material.opacity=0;const base=ch.g.position.clone();for(let i=0;i<n;i++){const m=add(new T.Mesh(new T.PlaneGeometry(.48,.48),new T.MeshBasicMaterial({map:C.kingTex,transparent:true,side:T.DoubleSide,fog:false})));const u=(i%5)/5,v=Math.floor(i/5)/5;const uv=m.geometry.attributes.uv;for(let k=0;k<uv.count;k++)uv.setXY(k,u+uv.getX(k)*.2,v+uv.getY(k)*.2);
       m.position.copy(base).add(new T.Vector3((u-.4)*2.2,v*2.2+.2,0));const vel=new T.Vector3(dir*(2+Math.random()*6),(Math.random()-.1)*6,(Math.random()-.5)*6);C.every((t,dt)=>{if(m.material.opacity<=0)return;m.position.addScaledVector(vel,dt);vel.y-=4*dt;m.rotation.x+=dt*5;m.rotation.z+=dt*4;m.material.opacity=Math.max(0,m.material.opacity-dt*.45)})}};
-  C.flash=(op=.85,ms=1100)=>{white.style.transition='opacity .1s';white.style.opacity=op;setTimeout(()=>{white.style.transition=`opacity ${ms}ms`;white.style.opacity=0},120)};
+  C.flash=(op=.85,ms=1100)=>{white.style.background='#fff';white.style.transition='opacity .1s';white.style.opacity=op;setTimeout(()=>{white.style.transition=`opacity ${ms}ms`;white.style.opacity=0},120)};
+  /* a sky dome with a vertical gradient (and matching fog) */
+  C.sky=(top,mid,bottom,fogCol,fogD=.02)=>{const c=document.createElement('canvas');c.width=8;c.height=256;const x=c.getContext('2d');const gr=x.createLinearGradient(0,0,0,256);gr.addColorStop(0,top);gr.addColorStop(.55,mid);gr.addColorStop(1,bottom);x.fillStyle=gr;x.fillRect(0,0,8,256);
+    const m=add(new T.Mesh(new T.SphereGeometry(200,32,16),new T.MeshBasicMaterial({map:new T.CanvasTexture(c),side:T.BackSide,fog:false,depthWrite:false})));scene.background=new T.Color(bottom);scene.fog=new T.FogExp2(fogCol,fogD);return m};
+  C.ground=(col,size=200,y=0)=>{const m=add(new T.Mesh(new T.CircleGeometry(size,64),new T.MeshBasicMaterial({color:col})));m.rotation.x=-Math.PI/2;m.position.y=y;return m};
+  /* our cosy room (walls, window with daylight, table, lamp) — it can dissolve into glowing dust */
+  C.room=()=>{const parts=[];const box=(w,h,d,col,x,y,z)=>{const m=add(new T.Mesh(new T.BoxGeometry(w,h,d),new T.MeshBasicMaterial({color:col,transparent:true,opacity:1})));m.position.set(x,y,z);parts.push(m);return m};
+    box(26,.3,26,0x5a3d26,0,-.16,0);                 /* wooden floor */
+    box(26,14,.4,0x463631,0,7,-12);                   /* back wall */
+    box(.4,14,26,0x3f302b,-13,7,0);box(.4,14,26,0x3f302b,13,7,0);
+    box(26,.4,26,0x2e2420,0,14,0);                    /* ceiling */
+    const win=box(8,5.5,.2,0x9fd3ff,0,7.5,-11.7);       /* window with daylight */
+    box(8.6,.4,.5,0xd9cfbf,0,10.4,-11.6);box(8.6,.4,.5,0xd9cfbf,0,4.6,-11.6);box(.4,5.9,.5,0xd9cfbf,-4.2,7.5,-11.6);box(.4,5.9,.5,0xd9cfbf,4.2,7.5,-11.6);
+    box(9,.35,6,0x6b4a30,0,-.02,0);                   /* the table the board stands on */
+    box(.5,3,.5,0x6b4a30,-4,-1.6,2.5);box(.5,3,.5,0x6b4a30,4,-1.6,2.5);
+    box(2.2,8,.3,0x7b2f2f,-6.4,7.3,-11.4);box(2.2,8,.3,0x7b2f2f,6.4,7.3,-11.4); /* curtains */
+    const cup=add(new T.Mesh(new T.CylinderGeometry(.45,.35,.8,20),new T.MeshBasicMaterial({color:0xf2efe8,transparent:true})));cup.position.set(3.2,.5,1.4);parts.push(cup);
+    const lamp=C.sprite(0xffc98a,9,.55);lamp.position.set(-8,9,-6);
+    const sun=C.sprite(0xfff3c4,7,.6);sun.position.set(0,7.5,-11.4);
+    /* glowing dust sampled on every surface */
+    const N=LOWC?1500:4200;const g=new T.BufferGeometry(),pos=new Float32Array(N*3),col=new Float32Array(N*3),vel=new Float32Array(N*3);
+    const areas=parts.map(m=>{const p=m.geometry.parameters;return Math.max(.2,(p.width||1)*(p.height||1)+(p.height||1)*(p.depth||1)+(p.width||1)*(p.depth||1))});const tot=areas.reduce((a,b)=>a+b,0);
+    let k=0;parts.forEach((m,i)=>{const n=Math.round(N*areas[i]/tot);const p=m.geometry.parameters;const cc=m.material.color;for(let j=0;j<n&&k<N;j++,k++){const w=p.width||p.radiusTop*2||1,h=p.height||1,d=p.depth||p.radiusTop*2||1;
+      pos[k*3]=m.position.x+(Math.random()-.5)*w;pos[k*3+1]=m.position.y+(Math.random()-.5)*h;pos[k*3+2]=m.position.z+(Math.random()-.5)*d;col[k*3]=cc.r*1.6;col[k*3+1]=cc.g*1.6;col[k*3+2]=cc.b*1.6;
+      const dir=new T.Vector3(pos[k*3],pos[k*3+1]-3,pos[k*3+2]).normalize();vel[k*3]=dir.x*(2+Math.random()*6);vel[k*3+1]=1+Math.random()*4;vel[k*3+2]=dir.z*(2+Math.random()*6)}});
+    g.setAttribute('position',new T.BufferAttribute(pos,3));g.setAttribute('color',new T.BufferAttribute(col,3));g.setDrawRange(0,k);
+    const dust=add(new T.Points(g,new T.PointsMaterial({size:.16,vertexColors:true,transparent:true,opacity:0,blending:ADD,depthWrite:false,map:G})));
+    return{parts,dissolve(t0,dur){C.every((t,dt)=>{const q=C.clamp((t-t0)/dur);if(q<=0)return;
+      parts.forEach((m,i)=>{const local=C.clamp(q*1.6-(i/parts.length)*.6);m.material.opacity=1-local;m.visible=local<1});lamp.material.opacity=.55*(1-q);sun.material.opacity=.6*(1-q);
+      dust.material.opacity=q<.5?q*2:Math.max(0,2-q*2);for(let i=0;i<k;i++){pos[i*3]+=vel[i*3]*dt*q;pos[i*3+1]+=vel[i*3+1]*dt*q;pos[i*3+2]+=vel[i*3+2]*dt*q}g.attributes.position.needsUpdate=true;
+      if(q>0)C.once('dissolve'+t0,()=>{if(C.M){C.M.riser(t0,dur*.8,.25);C.M.noise(t0,dur,{type:'highpass',f:2500,f2:8000,g:.12,att:dur*.5,rel:.4});for(let i=0;i<10;i++)C.M.tone(1500+Math.random()*2500,t0+i*dur/10,.5,{type:'triangle',g:.03})}})})}};
+  };
   C.M=makeSynth(speed);
   /* the scene script */
   const S=sceneFn(C);const DUR=S.dur;
   let start=null,last=0,ended=false,finish;const done=new Promise(r=>finish=r);
-  const cleanup=()=>{removeEventListener('resize',resize);try{R.dispose()}catch(e){}cv.remove();ui.remove();white.remove()};
-  const end=()=>{if(ended)return;ended=true;C.M&&C.M.stop();white.style.transition='opacity .35s';white.style.opacity=1;setTimeout(()=>{cleanup();finish()},400)};
+  const cleanup=()=>{removeEventListener('resize',resize);endFns.forEach(f=>{try{f()}catch(e){}});try{R.dispose()}catch(e){}cv.remove();ui.remove();if(!I.keepVeil)white.remove()};
+  const end=()=>{if(ended)return;ended=true;C.M&&C.M.stop();if(I.veilOut)white.style.background=I.veilOut;white.style.transition='opacity .35s';white.style.opacity=1;setTimeout(()=>{cleanup();finish(white)},400)};
+  C.end=end;
+  I.onStart&&I.onStart(C);
   ui.onclick=end;
   const frame=now=>{
     if(ended)return;requestAnimationFrame(frame);
-    if(start===null){start=now;last=now}
-    const t=(now-start)/1000*speed,dt=Math.min(.05,(now-last)/1000)*speed;last=now;
-    if(t>=DUR){end();return}
+    if(start===null){start=now-(I.seek||0)*1000/speed;last=now;requestAnimationFrame(()=>{if(!ended)white.style.opacity=0});if(I.seek)evq.forEach(e=>{if(e.t<I.seek-.05)e.done=1})}
+    const raw=(now-start)/1000*speed,dt=Math.min(.05,(now-last)/1000)*speed;last=now;
+    if(raw>=DUR){end();return}
+    /* a scene may bend time (slow motion, rewind) */
+    const t=S.warp?S.warp(raw):raw;C.raw=raw;C.t=t;
+    for(const e of evq){if(e.t>t)break;if(!e.done){e.done=1;try{e.f(t)}catch(err){console.warn(err)}}}
     const[cp,cl]=S.cam(t);cam.position.copy(cp);cam.position.x+=(Math.random()-.5)*C.shake;cam.position.y+=(Math.random()-.5)*C.shake;cam.lookAt(cl);C.shake*=Math.pow(.02,dt);
     bills.forEach(m=>m.quaternion.copy(cam.quaternion));
     for(let i=0;i<NS;i++){if(sl[i]<=0)continue;sl[i]-=dt;sp[i*3]+=sv[i*3]*dt;sp[i*3+1]+=sv[i*3+1]*dt;sp[i*3+2]+=sv[i*3+2]*dt;sv[i*3+1]-=3*dt;if(sl[i]<=0)sp[i*3+1]=-999}sg.attributes.position.needsUpdate=true;
@@ -117,7 +159,7 @@ async function engine(I,sceneFn){
     R.render(scene,cam);
   };
   requestAnimationFrame(frame);
-  await done;
+  return await done;
 }
 
 /* ---------------- shared pieces of choreography ---------------- */
@@ -137,7 +179,7 @@ function kingEnd(C,king,t,cols){C.every(tt=>{if(tt>=t)C.once('kend'+t,()=>{const
 /* ---------------- the ten scenes ---------------- */
 const SCENES=[
 /* 1. Тисяча ривків — the attacker cuts through the king again and again */
-C=>{const k=C.char(C.kingTex,C.RED,0),a=C.char(C.atkTex,C.BLUE,-6);a.g.visible=false;C.floor();const rn=C.rune('#ff4d6d',7,0,0);C.dust(600,0x8a7bb8);
+C=>{const k=C.char(C.kingTex,C.RED,0),a=C.char(C.atkTex,C.BLUE,-6);a.g.visible=false;C.floor();const rn=C.rune('#ff4d6d',7,0,0);C.dust(600,0x8a7bb8);C.room().dissolve(.3,1.8);
   const cone=C.add(new C.T.Mesh(new C.T.ConeGeometry(2.6,12,40,1,true),new C.T.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0,blending:C.ADD,depthWrite:false,side:C.T.DoubleSide})));cone.position.set(0,6,0);
   C.every(t=>{cone.material.opacity=C.clamp(t/1.2)*.09;rn.material.opacity=C.clamp(t/1.5)*.8;rn.rotation.z=t*.3;k.glow.material.opacity=.3+Math.sin(t*3)*.08});
   dashSeq(C,a,0x9fdcff,C.V(0,0,0),2,12,.45,.3,C.BLUE);
@@ -146,7 +188,9 @@ C=>{const k=C.char(C.kingTex,C.RED,0),a=C.char(C.atkTex,C.BLUE,-6);a.g.visible=f
   score(C.M,{dur:12,root:61.7,bpm:130,climax:9.4});
   return{dur:12,cam:t=>t<2?(()=>{const q=C.ease(t/2);return[C.V(C.lerp(-3,4,q),C.lerp(7,2.4,q),C.lerp(16,6,q)),C.V(0,1.3,0)]})():t<9?orbit(C,C.V(0,1.3,0),6.4,1.9+Math.sin(t*2)*.2,(t-2)*.55-.4):orbit(C,C.V(0,1.3,0),C.lerp(6.4,9,C.clamp(t-9)),2.6,3.45)}},
 /* 2. Метеоритний дощ — burning rocks rain down, the last one carries the attacker */
-C=>{C.scene.background=new C.T.Color(0x140303);C.scene.fog=new C.T.FogExp2(0x1a0505,.035);const k=C.char(C.kingTex,C.RED,0);C.floor(0x120606);C.stars(800);C.dust(300,0xff7043);
+C=>{C.sky('#1a0202','#5a1208','#ff6d00','#3a0a04',.02);const k=C.char(C.kingTex,C.RED,0);C.ground(0x1c0f0b);
+  for(let i=0;i<12;i++){const v=C.add(new C.T.Mesh(new C.T.ConeGeometry(4+Math.random()*6,6+Math.random()*10,7),new C.T.MeshBasicMaterial({color:0x140806})));const a=Math.random()*Math.PI*2;v.position.set(Math.cos(a)*(40+Math.random()*30),3,Math.sin(a)*(40+Math.random()*30))}
+  for(let i=0;i<14;i++){const l=C.add(new C.T.Mesh(new C.T.PlaneGeometry(.4+Math.random(),12+Math.random()*10),new C.T.MeshBasicMaterial({color:0xff6d00,transparent:true,opacity:.7,blending:C.ADD,depthWrite:false})));l.rotation.x=-Math.PI/2;l.rotation.z=Math.random()*Math.PI;l.position.set((Math.random()-.5)*40,.03,(Math.random()-.5)*40)}C.stars(800);C.dust(300,0xff7043);
   const mets=[];for(let i=0;i<(C.LOW?10:18);i++){const s=C.sprite(0xff7043,1.2,0);mets.push({s,t:1.2+i*.38,from:C.V((Math.random()-.5)*30,30,(Math.random()-.5)*30-10),to:C.V((Math.random()-.5)*14,0,(Math.random()-.5)*14)})}
   C.every(t=>{mets.forEach((m,i)=>{const q=(t-m.t)/.8;if(q<0||q>1){m.s.material.opacity=0;return}m.s.material.opacity=1;m.s.position.lerpVectors(m.from,m.to,q*q);C.spark(m.s.position,C.V(0,1,0),.4,C.GOLD);if(q>.95)C.once('mh'+i,()=>{C.ring(m.to,0xff7043,t,3,.6);C.burst(m.to,[C.GOLD,new C.T.Color(0xff7043)],30,5);C.shake=.3})})});
   const big=C.char(C.atkTex,C.GOLD,0);big.g.visible=false;const bigGlow=C.sprite(0xff7043,6,0);
@@ -157,7 +201,8 @@ C=>{C.scene.background=new C.T.Color(0x140303);C.scene.fog=new C.T.FogExp2(0x1a0
   score(C.M,{dur:12,root:49,bpm:110,climax:9.4});
   return{dur:12,cam:t=>t<8?orbit(C,C.V(0,1.4,0),C.lerp(14,9,t/8),C.lerp(6,3,t/8),t*.18):[C.V(5,2,8),C.V(0,1.5,0)]}},
 /* 3. Падіння веж — towers fall from the sky and wall the king in */
-C=>{const k=C.char(C.kingTex,C.RED,0);C.floor(0x0a0614,checkerTex(C.T,'#140c22','#1d1430','#7c4dff'),40);C.dust(400,0xb388ff);
+C=>{C.sky('#1a1440','#c2577a','#ffb07a','#5a3a5a',.012);const k=C.char(C.kingTex,C.RED,0);C.ground(0x2a2238);C.floor(0x0a0614,checkerTex(C.T,'#2a1f48','#3a2c5c','#ffd1a8'),14);C.dust(300,0xffd1a8);
+  for(let i=0;i<14;i++){const a=i/14*Math.PI*2;const m=C.add(new C.T.Mesh(new C.T.ConeGeometry(14+Math.random()*10,20+Math.random()*25,5),new C.T.MeshBasicMaterial({color:i%2?0x3b2d55:0x4a3868})));m.position.set(Math.cos(a)*90,8,Math.sin(a)*90)}
   const towers=[];const n=C.LOW?6:8;for(let i=0;i<n;i++){const a=i/n*Math.PI*2;const m=C.add(new C.T.Mesh(new C.T.BoxGeometry(1.1,7,1.1),new C.T.MeshBasicMaterial({color:0x2a1f48})));const e=C.add(new C.T.Mesh(new C.T.BoxGeometry(1.16,7.06,1.16),new C.T.MeshBasicMaterial({color:0xb388ff,wireframe:true,transparent:true,opacity:.6,blending:C.ADD})));towers.push({m,e,x:Math.cos(a)*4,z:Math.sin(a)*4,t:1.5+i*.6})}
   C.every(t=>{towers.forEach((w,i)=>{const q=C.clamp((t-w.t)/.6);const y=C.lerp(40,3.5,q*q);[w.m,w.e].forEach(o=>o.position.set(w.x,y,w.z));if(q>=1)C.once('tw'+i,()=>{C.ring(C.V(w.x,.1,w.z),0xb388ff,t,4,.7);C.burst(C.V(w.x,.2,w.z),[C.VIO,C.WHITE],40,5);C.shake=.4;C.M&&C.M.drum(0,.0001)})});
     k.glow.material.opacity=.3+C.clamp((t-6)/2)*.5});
@@ -168,7 +213,9 @@ C=>{const k=C.char(C.kingTex,C.RED,0);C.floor(0x0a0614,checkerTex(C.T,'#140c22',
   score(C.M,{dur:12,root:55,bpm:96,climax:9.2});
   return{dur:12,cam:t=>t<7?orbit(C,C.V(0,2,0),C.lerp(15,10,t/7),C.lerp(9,5,t/7),t*.25):[C.V(Math.sin(t*.3)*6,1.2,6),C.V(0,3,0)]}},
 /* 4. Арена — a giant board; an army rises and fires at once */
-C=>{const k=C.char(C.kingTex,C.RED,0);C.floor(0x0a0614,checkerTex(C.T,'#1a1033','#0c0718','#ffd54f'),60);C.stars(900);
+C=>{C.sky('#2a6fdb','#7fb8ff','#e8f3ff','#cfe3ff',.008);const k=C.char(C.kingTex,C.RED,0);C.ground(0xd8c9a3);C.floor(0x0a0614,checkerTex(C.T,'#e8d9b0','#8a6a45','#ffffff'),22);
+  const stand=C.add(new C.T.Mesh(new C.T.CylinderGeometry(34,30,9,48,1,true),new C.T.MeshBasicMaterial({color:0xb59b74,side:C.T.DoubleSide})));stand.position.y=4.5;
+  for(let i=0;i<8;i++){const c=C.add(new C.T.Mesh(new C.T.PlaneGeometry(12,3),new C.T.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.8,depthWrite:false})));c.position.set(Math.cos(i)*80,40+Math.random()*10,Math.sin(i)*80);c.lookAt(0,40,0)}
   const army=[];const n=C.LOW?8:14;for(let i=0;i<n;i++){const a=i/n*Math.PI*2;const ch=C.char(C.atkTex,C.GOLD,Math.cos(a)*8,Math.sin(a)*8,1.8);ch.g.position.y=-3;army.push({ch,a,t:2+i*.35})}
   const beams=army.map(()=>C.beam(C.GOLD,.12));
   C.every(t=>{army.forEach((s,i)=>{const q=C.clamp((t-s.t)/1);s.ch.g.position.y=C.lerp(-3,0,C.ease(q));s.ch.glow.material.opacity=q*.8;if(q>.98)C.once('rise'+i,()=>{C.burst(s.ch.g.position.clone().setY(.5),[C.GOLD],18,3);C.M&&C.M.drum(t,.0001)})});
@@ -180,7 +227,10 @@ C=>{const k=C.char(C.kingTex,C.RED,0);C.floor(0x0a0614,checkerTex(C.T,'#1a1033',
   score(C.M,{dur:19,root:58.3,bpm:120,climax:14.8,bells:6});
   return{dur:19,cam:t=>t<9?[C.V(Math.sin(t*.2)*18,C.lerp(14,6,t/9),Math.cos(t*.2)*18),C.V(0,0,0)]:t<12.5?orbit(C,C.V(0,1.3,0),7,2,t*.6):[C.V(0,C.lerp(4,16,C.clamp((t-12.5)/3)),C.lerp(10,4,C.clamp((t-12.5)/3))),C.V(0,0,0)]}},
 /* 5. Вихор фігур — a tornado of pieces swallows the king */
-C=>{C.scene.background=new C.T.Color(0x05060f);const k=C.char(C.kingTex,C.RED,0);C.floor(0x05060f);C.dust(500,0x90caf9);
+C=>{C.sky('#1b2433','#3d4b5e','#56687c','#3a4656',.02);const k=C.char(C.kingTex,C.RED,0);
+  const sea=C.add(new C.T.Mesh(new C.T.PlaneGeometry(300,300,60,60),new C.T.MeshBasicMaterial({color:0x1d3a52,wireframe:false})));sea.rotation.x=-Math.PI/2;sea.position.y=-.6;const sp=sea.geometry.attributes.position;
+  const rock=C.add(new C.T.Mesh(new C.T.CylinderGeometry(3,4,1.2,12),new C.T.MeshBasicMaterial({color:0x2b2f36})));rock.position.y=-.4;
+  C.every(t=>{for(let i=0;i<sp.count;i++){const x=sp.getX(i),y=sp.getY(i);sp.setZ(i,Math.sin(x*.15+t*2)*.6+Math.cos(y*.12+t*1.6)*.5)}sp.needsUpdate=true});C.dust(500,0xcfd8dc);
   const n=C.LOW?24:48;const bits=[];for(let i=0;i<n;i++){const m=C.ghost(i%2?C.atkTex:C.kingTex,i%2?0x9fdcff:0xff8a80);m.scale.setScalar(.45);bits.push({m,a:Math.random()*Math.PI*2,h:Math.random()*10,r:2+Math.random()*3,s:1+Math.random()})}
   C.every((t,dt)=>{const sp=C.clamp(t/10)*2+.3;bits.forEach(b=>{b.a+=dt*b.s*sp*(1+(10-b.h)*.1);const r=b.r*(t<13?1:C.lerp(1,.1,C.clamp((t-13)/1.5)));b.m.position.set(Math.cos(b.a)*r*(.5+b.h*.12),b.h+Math.sin(t+b.a)*.2,Math.sin(b.a)*r*(.5+b.h*.12));b.m.material.opacity=C.clamp(t/2)*.8});
     k.g.position.y=t<13?C.clamp((t-4)/6)*3:C.lerp(3,0,C.clamp((t-13)*2));k.g.rotation.y=t*2;k.glow.material.opacity=.3+C.clamp((t-4)/6)*.5;
@@ -192,11 +242,13 @@ C=>{C.scene.background=new C.T.Color(0x05060f);const k=C.char(C.kingTex,C.RED,0)
   score(C.M,{dur:18,root:51.9,bpm:140,climax:14});
   return{dur:18,cam:t=>orbit(C,C.V(0,C.lerp(1.5,4,C.clamp(t/12)),0),C.lerp(13,8,C.clamp(t/12)),C.lerp(2,7,C.clamp(t/12)),t*.35)}},
 /* 6. Затемнення — the sun goes black and its corona strikes */
-C=>{C.scene.background=new C.T.Color(0x0b0b16);C.scene.fog=new C.T.FogExp2(0x0b0b16,.02);const k=C.char(C.kingTex,C.RED,0);C.floor(0x0d0b12);C.stars(1200);
+C=>{const skyM=C.sky('#3a2a6a','#d9905a','#f5c27a','#d9a06a',.01);const k=C.char(C.kingTex,C.RED,0);C.ground(0xd4a35e);C.stars(600);
+  for(let i=0;i<20;i++){const d=C.add(new C.T.Mesh(new C.T.SphereGeometry(10+Math.random()*12,24,12,0,Math.PI*2,0,Math.PI/2),new C.T.MeshBasicMaterial({color:i%2?0xc9944f:0xb98443})));const a=Math.random()*Math.PI*2,r=30+Math.random()*60;d.position.set(Math.cos(a)*r,-4,Math.sin(a)*r);d.scale.y=.35}
+  C.every(t=>{const q=C.clamp((t-1)/8);skyM.material.color.setScalar(1-q*.85);C.scene.fog.color.setRGB(.85*(1-q*.8),.63*(1-q*.8),.42*(1-q*.8))});
   const sun=C.sprite(0xffd54f,22,1);sun.position.set(0,18,-40);const moon=C.add(new C.T.Mesh(new C.T.CircleGeometry(3.6,64),new C.T.MeshBasicMaterial({color:0x000000,fog:false})));moon.position.set(-12,18,-39);
   const corona=C.add(new C.T.Mesh(new C.T.RingGeometry(3.7,5.5,64),new C.T.MeshBasicMaterial({color:0xfff3c4,transparent:true,opacity:0,blending:C.ADD,depthWrite:false,fog:false})));corona.position.set(0,18,-39.5);
   const rays=[];for(let i=0;i<5;i++)rays.push(C.beam(C.GOLD,.18));
-  C.every(t=>{const q=C.clamp((t-1)/8);moon.position.x=C.lerp(-12,0,C.ease(q));C.scene.background.setRGB(.045*(1-q*.8),.045*(1-q*.8),.09*(1-q*.6));sun.material.opacity=1-q*.75;corona.material.opacity=q>.95?.9+Math.sin(t*8)*.1:0;
+  C.every(t=>{const q=C.clamp((t-1)/8);moon.position.x=C.lerp(-12,0,C.ease(q));sun.material.opacity=1-q*.75;corona.material.opacity=q>.95?.9+Math.sin(t*8)*.1:0;
     if(t>9)C.once('diamond',()=>{C.flash(.6,800);C.M&&C.M.bell(880,9);});
     rays.forEach((r,i)=>{if(t>11&&t<14){const ang=i/5*Math.PI*2+t;C.setBeam(r,C.V(Math.cos(ang)*4.6,18+Math.sin(ang)*4.6,-39.5),C.V(0,1.3,0),C.clamp((t-11)*1.5)*.7)}else if(t>=14)r.m.material.opacity=r.core.material.opacity=Math.max(0,r.m.material.opacity-.03)});
     k.glow.material.opacity=.2+C.clamp((t-9)/3)*.7});
@@ -204,7 +256,12 @@ C=>{C.scene.background=new C.T.Color(0x0b0b16);C.scene.fog=new C.T.FogExp2(0x0b0
   score(C.M,{dur:18,root:46.2,minor:false,bpm:80,climax:13.6,bells:5});
   return{dur:18,cam:t=>t<9?[C.V(C.lerp(-6,6,t/9),2,12),C.V(0,C.lerp(4,12,C.clamp(t/4)),-20)]:t<11?[C.V(0,1.6,7),C.V(0,10,-30)]:[C.V(5,2.5,6),C.V(0,2,0)]}},
 /* 7. Кришталева в'язниця — crystals grow around the king, then everything shatters */
-C=>{C.scene.background=new C.T.Color(0x02101a);C.scene.fog=new C.T.FogExp2(0x02101a,.05);const k=C.char(C.kingTex,C.RED,0);C.floor(0x031520);C.dust(500,0x80deea);const rn=C.rune('#80deea',8,0,0);
+C=>{C.sky('#020a1a','#0b2a4a','#3a6a8a','#1a3a5a',.015);const k=C.char(C.kingTex,C.RED,0);C.ground(0xdfeef7);C.stars(900);const rn=C.rune('#80deea',8,0,0);
+  const aur=[];for(let i=0;i<4;i++){const c=document.createElement('canvas');c.width=4;c.height=128;const x=c.getContext('2d');const gr=x.createLinearGradient(0,0,0,128);gr.addColorStop(0,'rgba(0,0,0,0)');gr.addColorStop(.6,i%2?'rgba(105,240,174,.8)':'rgba(179,136,255,.7)');gr.addColorStop(1,'rgba(0,0,0,0)');x.fillStyle=gr;x.fillRect(0,0,4,128);
+    const m=C.add(new C.T.Mesh(new C.T.PlaneGeometry(160,30,40,1),new C.T.MeshBasicMaterial({map:new C.T.CanvasTexture(c),transparent:true,blending:C.ADD,depthWrite:false,side:C.T.DoubleSide,fog:false})));m.position.set(0,40+i*6,-70-i*10);aur.push(m)}
+  C.every(t=>aur.forEach((m,i)=>{const p=m.geometry.attributes.position;for(let j=0;j<p.count;j++){const x=p.getX(j);p.setZ(j,Math.sin(x*.05+t*.6+i)*8)}p.needsUpdate=true}));
+  /* falling snow */
+  const sn=C.dust(900,0xffffff,60,30,.12);C.every((t,dt)=>{sn.position.y=-((t*1.5)%30)});
   const crys=[];const n=C.LOW?16:30;for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,r=1.3+Math.random()*1.6;const h=1.5+Math.random()*3;const m=C.add(new C.T.Mesh(new C.T.ConeGeometry(.35+Math.random()*.3,h,5),new C.T.MeshBasicMaterial({color:0x80deea,transparent:true,opacity:.55,blending:C.ADD,depthWrite:false})));m.position.set(Math.cos(a)*r,0,Math.sin(a)*r);m.rotation.set((Math.random()-.5)*.6,Math.random()*3,(Math.random()-.5)*.6);m.scale.set(1,.01,1);crys.push({m,t:2+i*(8/n),h,vel:C.V(Math.cos(a)*6,4+Math.random()*4,Math.sin(a)*6)})}
   C.every((t,dt)=>{rn.material.opacity=C.clamp(t/2)*.7;rn.rotation.z=-t*.2;crys.forEach((c,i)=>{if(t<12.5){const q=C.clamp((t-c.t)/.5);c.m.scale.y=Math.max(.01,q);c.m.position.y=c.h*q*.5;if(q>0)C.once('cg'+i,()=>{C.M&&C.M.tone(1200+Math.random()*1600,c.t,.6,{type:'triangle',g:.04})})}else{c.m.position.addScaledVector(c.vel,dt);c.vel.y-=6*dt;c.m.rotation.x+=dt*4;c.m.material.opacity=Math.max(0,c.m.material.opacity-dt*.4)}});
     k.glow.material.opacity=.2+Math.sin(t*2)*.05+(t>9?C.clamp((t-9)/3)*.5:0)});
@@ -213,7 +270,7 @@ C=>{C.scene.background=new C.T.Color(0x02101a);C.scene.fog=new C.T.FogExp2(0x021
   score(C.M,{dur:17,root:65.4,bpm:90,climax:12.5,bells:8});
   return{dur:17,cam:t=>t<9?orbit(C,C.V(0,1.4,0),C.lerp(10,6,t/9),C.lerp(5,2,t/9),t*.3):t<12.5?[C.V(-8,2.4,5),C.V(-1,1.4,0)]:orbit(C,C.V(0,1.4,0),9,3,3.6+(t-12.5)*.2)}},
 /* 8. Дуель сил — blue against red: orbs, clashing beams, a gathered violet strike */
-C=>{const BLUE=C.BLUE,RED=C.RED,VIO=C.VIO;C.floor();const rnK=C.rune('#ff4d6d',7,3,0),rnA=C.rune('#4fc3f7',7,-4,0);C.dust(700,0x8a7bb8);
+C=>{const BLUE=C.BLUE,RED=C.RED,VIO=C.VIO;C.floor();const rnK=C.rune('#ff4d6d',7,3,0),rnA=C.rune('#4fc3f7',7,-4,0);C.dust(700,0x8a7bb8);C.room().dissolve(.6,2.6);
   const k=C.char(C.kingTex,RED,3),a=C.char(C.atkTex,BLUE,-4);a.g.visible=false;
   dashSeq(C,a,0x9fdcff,C.V(3,0,0),3,10,.5,.34,BLUE);
   C.every(t=>{rnK.material.opacity=C.clamp((t-.5)/1.5)*(t<27?.8:Math.max(0,.8-(t-27)));rnK.rotation.z=t*.25;
@@ -260,7 +317,7 @@ C=>{C.scene.background=new C.T.Color(0x000002);C.scene.fog=null;C.stars(2200,140
   score(C.M,{dur:30,root:41.2,minor:false,bpm:72,climax:26.9,bells:10});
   return{dur:30,cam:t=>t<12?[C.V(Math.sin(t*.12)*26,C.lerp(14,6,t/12),Math.cos(t*.12)*26),C.V(0,1,0)]:t<20?[C.V(C.lerp(9,4,(t-12)/8),2,C.lerp(9,10,(t-12)/8)),C.V(0,4,-12)]:t<26?[C.V(0,2.2,8),C.V(0,6,-22)]:[C.V(4,2,6),C.V(0,1.5,0)]}},
 /* 10. Дзеркальна зала — mirror clones surround the king and strike together */
-C=>{C.scene.background=new C.T.Color(0x05040a);const k=C.char(C.kingTex,C.RED,0);C.floor(0x07060e,checkerTex(C.T,'#0e0c18','#07060e','#e0e0ff'),40);
+C=>{C.scene.background=new C.T.Color(0x05040a);const k=C.char(C.kingTex,C.RED,0);C.floor(0x07060e,checkerTex(C.T,'#0e0c18','#07060e','#e0e0ff'),40);C.room().dissolve(.5,2.4);
   const n=C.LOW?6:8;const mirrors=[],clones=[];for(let i=0;i<n;i++){const a=i/n*Math.PI*2;const fr=C.add(new C.T.Mesh(new C.T.PlaneGeometry(3,5.2),new C.T.MeshBasicMaterial({color:0x9fa8da,transparent:true,opacity:0,side:C.T.DoubleSide,blending:C.ADD,depthWrite:false})));fr.position.set(Math.cos(a)*9,2.6,Math.sin(a)*9);fr.lookAt(0,2.6,0);
     const ed=C.add(new C.T.LineSegments(new C.T.EdgesGeometry(new C.T.PlaneGeometry(3,5.2)),new C.T.LineBasicMaterial({color:0xe0e0ff,transparent:true,opacity:0})));ed.position.copy(fr.position);ed.quaternion.copy(fr.quaternion);mirrors.push({fr,ed,a});
     const cl=C.char(C.atkTex,C.BLUE,Math.cos(a)*9,Math.sin(a)*9,2);cl.g.visible=false;clones.push({cl,a})}
@@ -277,6 +334,7 @@ C=>{C.scene.background=new C.T.Color(0x05040a);const k=C.char(C.kingTex,C.RED,0)
   return{dur:30,cam:t=>t<6?orbit(C,C.V(0,2,0),C.lerp(4,7,t/6),2.2,t*.4):t<19?orbit(C,C.V(0,2,0),16,C.lerp(4,9,C.clamp((t-6)/10)),t*.25):t<25?orbit(C,C.V(0,1.4,0),6,2,t*.5):[C.V(0,4,12),C.V(0,3,0)]}},
 ];
 const BY_LEVEL={1:[0,1,2],2:[3,4,5,6],3:[7,8,9]};
+window.CINE={engine,score,makeSynth,orbit,strike,kingEnd,dashSeq,checkerTex,glowTex,pieceTex};
 window.CINEMA_SCENES=['Тисяча ривків','Метеоритний дощ','Падіння веж','Арена','Вихор фігур','Затемнення','Кришталева вʼязниця','Дуель сил','Космос','Дзеркальна зала'];
 window.playCinema=function(I){
   let idx=I.scene;
