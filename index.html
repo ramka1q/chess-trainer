@@ -276,7 +276,7 @@ body.wood .sq.d.hl{background-image:linear-gradient(rgba(170,190,40,.5),rgba(170
 <script src="masters.js"></script>
 <script src="storm-live.js?v=2.5.2" defer></script>
 <script src="storm-fx.js?v=2.5.2" defer></script>
-<script src="storm.js?v=2.5.3" defer></script>
+<script src="storm.js?v=2.5.4" defer></script>
 <script src="cinema.js?v=2.5.2" defer></script>
 <script src="legend.js?v=2.5.2" defer></script>
 <script src="icons.js?v=2.5.0" defer></script>
@@ -885,7 +885,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='2.5.3';
+const APP_VERSION='2.5.4';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -3475,6 +3475,7 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '2.5.4':['🌐 Запрошення показує, чи воно активне, і саме відновлюється, щойно ти повертаєшся на сторінку (наприклад, після того як надіслав посилання в месенджері)','Друг пробує підключитися до 5 хвилин'],
   '2.5.3':['🌐 Гра з другом за посиланням: друг одразу потрапляє в гру, без питань першого запуску і без завантаження Stockfish','Якщо сторінка з запрошенням ще не відкрита або телефон заснув, друг автоматично пробує підключитися ще 2 хвилини','Запрошення не пропадає, коли телефон того, хто запрошує, ненадовго втрачає звʼязок'],
   '2.5.2':['🦖 Динозавр тепер ходить цілу хвилину і втричі повільніше','📱 На телефонах (iPhone) екран більше не наближається під час анімацій'],
   '2.5.1':['⏪ Шахи-Буря: тепер можна гортати партію назад і дивитися кожен хід і кожну подію погоди (кнопки ⏮ ◀ ▶ ⏭, стрілки на клавіатурі або клік по ходу в журналі)'],
