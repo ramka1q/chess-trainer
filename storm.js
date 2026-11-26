@@ -1135,7 +1135,27 @@ const PFX='chstorm-';
 const NET={peer:null,conn:null,handler:null,onClose:null,isHost:false};
 let PEER_P=null;
 function loadPeer(){return PEER_P||(PEER_P=new Promise((res,rej)=>{if(window.Peer)return res();const s=document.createElement('script');s.src='https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';s.crossOrigin='anonymous';s.onload=()=>res();s.onerror=()=>{PEER_P=null;rej(new Error('peerjs'))};document.head.appendChild(s)}))}
-function netClose(){const c=NET.conn,p=NET.peer;NET.conn=NET.peer=null;NET.handler=null;NET.onClose=null;try{c&&c.close()}catch(e){}try{p&&p.destroy()}catch(e){}}
+function netClose(){const c=NET.conn,p=NET.peer,rl=NET.relays||[];NET.conn=NET.peer=null;NET.relays=[];NET.handler=null;NET.onClose=null;try{c&&c.close()}catch(e){}try{p&&p.destroy()}catch(e){}rl.forEach(r=>{try{r.close()}catch(e){}})}
+/* ---- relay channel: when a direct browser-to-browser link can't be made (mobile networks, strict routers),
+   the game messages go through a public MQTT broker over WebSocket. Topics carry only the random invite code. ---- */
+const BROKERS=['wss://broker.emqx.io:8084/mqtt','wss://broker.hivemq.com:8884/mqtt'];
+let MQTT_P=null;
+function loadMqtt(){return MQTT_P||(MQTT_P=new Promise((res,rej)=>{if(window.mqtt)return res();const s=document.createElement('script');s.src='https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js';s.crossOrigin='anonymous';s.onload=()=>res();s.onerror=()=>{MQTT_P=null;rej(new Error('mqtt'))};document.head.appendChild(s)}))}
+/* one relay endpoint. role 'h' (host) waits for a hello, role 'g' (guest) says hello until the host answers */
+function relay(url,code,role,onOpen){
+  const H={},Qd=[],R={open:false,kind:'relay',url,on(ev,f){H[ev]=f;if(ev==='data'){Qd.splice(0).forEach(d=>f(d))}},send(d){if(!R.cli)return;R.seq=(R.seq||0)+1;try{R.cli.publish(`chstorm/${code}/${role==='h'?'g':'h'}`,JSON.stringify({s:R.seq,d}),{qos:1})}catch(e){}},
+    close(){if(R.closed)return;R.closed=true;try{if(R.open)R.cli.publish(`chstorm/${code}/${role==='h'?'g':'h'}`,JSON.stringify({bye:1}),{qos:0})}catch(e){}clearInterval(R.hi);setTimeout(()=>{try{R.cli&&R.cli.end(true)}catch(e){}},200)}};
+  let last=0;
+  try{R.cli=window.mqtt.connect(url,{clientId:'chs_'+role+'_'+Math.random().toString(36).slice(2,10),keepalive:25,reconnectPeriod:2500,connectTimeout:8000,clean:true})}catch(e){return R}
+  const mine=`chstorm/${code}/${role}`,theirs=`chstorm/${code}/${role==='h'?'g':'h'}`;
+  R.cli.on('connect',()=>{if(R.closed)return;R.cli.subscribe(mine,{qos:1});if(role==='g'&&!R.open){const hi=()=>{try{R.cli.publish(theirs,JSON.stringify({hello:1}),{qos:0})}catch(e){}};hi();clearInterval(R.hi);R.hi=setInterval(()=>{if(R.open||R.closed)return clearInterval(R.hi);hi()},1200)}});
+  R.cli.on('message',(t,buf)=>{if(R.closed)return;let m;try{m=JSON.parse(buf.toString())}catch(e){return}
+    if(m.hello&&role==='h'){if(R.open){try{R.cli.publish(theirs,JSON.stringify({ack:1}),{qos:1})}catch(e){}return}if(NET.conn&&NET.conn.open&&NET.conn!==R)return;try{R.cli.publish(theirs,JSON.stringify({ack:1}),{qos:1})}catch(e){}R.open=true;if(onOpen(R)===false)R.open=false;return}
+    if(m.ack&&role==='g'){if(!R.open){R.open=true;clearInterval(R.hi);onOpen(R)}return}
+    if(m.bye){if(R.open){R.open=false;H.close&&H.close()}return}
+    if(m.s!=null){if(m.s<=last)return;last=m.s;if(H.data)H.data(m.d);else Qd.push(m.d)}});
+  R.cli.on('error',()=>{});
+  return R}
 function netSend(d){try{if(NET.conn&&NET.conn.open)NET.conn.send(d)}catch(e){}}
 function bindConn(c){NET.conn=c;c.on('data',d=>{if(!d||typeof d!=='object')return;if(d.t==='start'&&!NET.isHost){guestStart(d);return}NET.handler&&NET.handler(d)});c.on('close',()=>{if(NET.conn===c){NET.onClose&&NET.onClose()}});c.on('error',()=>{})}
 const netErr=e=>{const t=e&&e.type;return t==='peer-unavailable'?'Запрошення не знайдено. Можливо, друг закрив сторінку або посилання старе.':t==='network'||t==='server-error'||t==='socket-error'||t==='socket-closed'?'Немає зв’язку з сервером з’єднання. Перевір інтернет і спробуй ще раз.':t==='browser-incompatible'?'Цей браузер не підтримує гру по мережі.':'Не вдалося з’єднатися ('+(t||e&&e.message||'помилка')+').'};
@@ -1148,15 +1168,21 @@ async function netHost(onReady,onConn,onErr){
   document.addEventListener('visibilitychange',vis);
   /* phones drop the signalling connection when the screen sleeps: reconnect with the same code */
   peer.on('disconnected',()=>{NET.hostSt&&NET.hostSt(false);if(NET.peer===peer&&!peer.destroyed)setTimeout(()=>{try{if(NET.peer===peer&&!peer.destroyed)peer.reconnect()}catch(e){}},1000)});
-  peer.on('connection',c=>{if(NET.conn&&NET.conn.open){c.on('open',()=>c.close());return}c.on('open',()=>{bindConn(c);onConn()})});
+  peer.on('connection',c=>{if(NET.conn&&NET.conn.open){c.on('open',()=>c.close());return}c.on('open',()=>{if(NET.conn&&NET.conn.open){c.close();return}bindConn(c);onConn()})});
+  /* relay endpoints for guests whose network blocks the direct link */
+  loadMqtt().then(()=>{if(NET.peer!==peer)return;NET.relays=BROKERS.map(u=>relay(u,code,'h',r=>{if(NET.conn&&NET.conn.open&&NET.conn!==r)return false;bindConn(r);onConn();return true}))}).catch(()=>{});
   peer.on('error',e=>{if(NET.peer!==peer)return;if(e.type==='unavailable-id'){netHost(onReady,onConn,onErr);return}if(e.type==='peer-unavailable')return;onErr(e)});
 }
 async function netJoin(code,onOk,onErr){
   await loadPeer();netClose();NET.isHost=false;
   const peer=new window.Peer();NET.peer=peer;
-  let tmo=null;
-  peer.on('open',()=>{const c=peer.connect(PFX+code,{reliable:true});tmo=setTimeout(()=>{if(NET.peer===peer&&!(c&&c.open))onErr({type:'peer-unavailable'})},15000);c.on('open',()=>{clearTimeout(tmo);bindConn(c);onOk()})});
-  peer.on('error',e=>{if(NET.peer!==peer)return;clearTimeout(tmo);onErr(e)});
+  let tmo=null,done=false,errs=0;
+  const win=c=>{if(done||NET.peer!==peer){try{c.close()}catch(e){}return}done=true;clearTimeout(tmo);(NET.relays||[]).forEach(r=>{if(r!==c)try{r.close()}catch(e){}});bindConn(c);onOk()};
+  const fail=e=>{if(done||NET.peer!==peer)return;done=true;clearTimeout(tmo);onErr(e)};
+  tmo=setTimeout(()=>fail({type:'peer-unavailable'}),20000);
+  peer.on('open',()=>{if(localStorage.wxForceRelay)return;/* (debug: test the relay alone) */const c=peer.connect(PFX+code,{reliable:true});c.on('open',()=>win(c))});
+  peer.on('error',e=>{if(NET.peer!==peer)return;if(e&&e.type==='peer-unavailable'){errs++;return}/* the relay may still work */});
+  setTimeout(()=>{if(done||NET.peer!==peer)return;loadMqtt().then(()=>{if(done||NET.peer!==peer)return;NET.relays=BROKERS.map(u=>relay(u,code,'g',r=>win(r)))}).catch(()=>{})},2500);
 }
 function guestStart(d){
   if(CUR&&CUR.stop)CUR.stop(true);CUR=null;closeModal();showMain();setNav('storm');
