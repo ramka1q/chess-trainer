@@ -276,7 +276,7 @@ body.wood .sq.d.hl{background-image:linear-gradient(rgba(170,190,40,.5),rgba(170
 <script src="masters.js"></script>
 <script src="storm-live.js?v=2.5.2" defer></script>
 <script src="storm-fx.js?v=2.5.2" defer></script>
-<script src="storm.js?v=2.5.2" defer></script>
+<script src="storm.js?v=2.5.3" defer></script>
 <script src="cinema.js?v=2.5.2" defer></script>
 <script src="legend.js?v=2.5.2" defer></script>
 <script src="icons.js?v=2.5.0" defer></script>
@@ -885,7 +885,7 @@ $('#engSel').onchange=e=>{setEngineMode(e.target.value);setTimeout(updEngName,15
 async function updEngName(){$('#engSel').value=engineMode();const el=$('#engName');el.textContent='…';try{await coachE.init();el.textContent=coachE.name}catch(e){el.textContent='рушій не завантажився'}}
 setTimeout(updEngName,800);
 /* ---------- 🔔 updates ---------- */
-const APP_VERSION='2.5.2';
+const APP_VERSION='2.5.3';
 const verNum=v=>String(v||'0').split('.').map(x=>+x||0).reduce((a,x)=>a*1000+x,0);
 function showDl(txt,pct){const b=$('#dlBox');if(txt==null){b.style.display='none';return}b.style.display='block';$('#dlTxt').innerHTML=txt;$('#dlBar').style.width=Math.max(0,Math.min(100,pct||0))+'%'}
 async function checkUpdate(){
@@ -3475,6 +3475,7 @@ showView('home');
 engineWarm();
 /* ---------- 🆕 "what's new" after every update ---------- */
 const CHANGELOG={
+  '2.5.3':['🌐 Гра з другом за посиланням: друг одразу потрапляє в гру, без питань першого запуску і без завантаження Stockfish','Якщо сторінка з запрошенням ще не відкрита або телефон заснув, друг автоматично пробує підключитися ще 2 хвилини','Запрошення не пропадає, коли телефон того, хто запрошує, ненадовго втрачає звʼязок'],
   '2.5.2':['🦖 Динозавр тепер ходить цілу хвилину і втричі повільніше','📱 На телефонах (iPhone) екран більше не наближається під час анімацій'],
   '2.5.1':['⏪ Шахи-Буря: тепер можна гортати партію назад і дивитися кожен хід і кожну подію погоди (кнопки ⏮ ◀ ▶ ⏭, стрілки на клавіатурі або клік по ходу в журналі)'],
   '2.5.0':['🦖 10 нових живих подій у Шахах-Бурі (по ~10 секунд, поки ти граєш): динозавр-мисливець, пожежа, мавпа-злодійка, бомба, чорна діра, курка з яйцями, бліц','🏃 Три події ламають четверту стіну: фігура тікає з дошки по всьому сайту, чужа мишка, на сайті гасне світло','🌪 Усі старі події перемальовані: справжнє торнадо з вихором, гарна ворона, розгалужена блискавка, НЛО з променем, метеорит з вибухом. Тривають трохи довше','🛠 Фігури більше не стрибають на нове місце після кінця анімації','🎙 У 2-хвилинних фільмах персонажі розмовають українською, з субтитрами','🏆 Легендарні мати стало трохи легше отримати','Анімації взяття ферзя прибрано'],
@@ -3544,7 +3545,9 @@ function showWhatsNew(){
 }
 applyTheme(S.boardTheme||'green');
 setTimeout(function tryAuto(){if(document.visibilityState==='visible')autoEngineCheck();else setTimeout(tryAuto,20000)},20000);
-{const afterDev=()=>{if(!S.elo)setTimeout(()=>askElo(true),300);else setTimeout(showWhatsNew,700)};
+/* came through a Storm invite link? then no questions and no big download now: straight to the friend's game */
+const VIA_INVITE=/[?&]storm=[a-z0-9]{4,12}(&|$)/.test(location.search);
+if(!VIA_INVITE){const afterDev=()=>{if(!S.elo)setTimeout(()=>askElo(true),300);else setTimeout(showWhatsNew,700)};
  const isPhone=(window.matchMedia&&matchMedia('(pointer:coarse)').matches)||innerWidth<760;
  /* computers simply use the full engine (no question, no pop-up); phones are asked once */
  const afterTheme=()=>{if(!isPhone&&S.devChoice!=='full'&&S.devChoice!=='lite'&&!S.pcFullSet){S.pcFullSet=true;setDevice('full');S.autoEng.why='компʼютер';save()}

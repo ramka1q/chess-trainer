@@ -1143,15 +1143,18 @@ async function netHost(onReady,onConn,onErr){
   await loadPeer();netClose();NET.isHost=true;
   const code=Array.from({length:6},()=>'abcdefghjkmnpqrstuvwxyz23456789'[Math.floor(Math.random()*31)]).join('');
   const peer=new window.Peer(PFX+code);NET.peer=peer;
-  peer.on('open',()=>onReady(code));
+  let first=true;peer.on('open',()=>{if(first){first=false;onReady(code)}});
+  /* phones drop the signalling connection when the screen sleeps: reconnect with the same code */
+  peer.on('disconnected',()=>{if(NET.peer===peer&&!peer.destroyed)setTimeout(()=>{try{if(NET.peer===peer&&!peer.destroyed)peer.reconnect()}catch(e){}},1000)});
   peer.on('connection',c=>{if(NET.conn&&NET.conn.open){c.on('open',()=>c.close());return}c.on('open',()=>{bindConn(c);onConn()})});
   peer.on('error',e=>{if(NET.peer!==peer)return;if(e.type==='unavailable-id'){netHost(onReady,onConn,onErr);return}if(e.type==='peer-unavailable')return;onErr(e)});
 }
 async function netJoin(code,onOk,onErr){
   await loadPeer();netClose();NET.isHost=false;
   const peer=new window.Peer();NET.peer=peer;
-  peer.on('open',()=>{const c=peer.connect(PFX+code,{reliable:true});c.on('open',()=>{bindConn(c);onOk()})});
-  peer.on('error',e=>{if(NET.peer!==peer)return;onErr(e)});
+  let tmo=null;
+  peer.on('open',()=>{const c=peer.connect(PFX+code,{reliable:true});tmo=setTimeout(()=>{if(NET.peer===peer&&!(c&&c.open))onErr({type:'peer-unavailable'})},15000);c.on('open',()=>{clearTimeout(tmo);bindConn(c);onOk()})});
+  peer.on('error',e=>{if(NET.peer!==peer)return;clearTimeout(tmo);onErr(e)});
 }
 function guestStart(d){
   if(CUR&&CUR.stop)CUR.stop(true);CUR=null;closeModal();showMain();setNav('storm');
@@ -1722,17 +1725,22 @@ function askGalleryPassword(){
   });
 }
 
-/* guest: opened an invite link */
-function joinInvite(code){
+/* guest: opened an invite link. If the friend's page is not reachable yet (closed, phone asleep, still loading),
+   keep trying for two minutes instead of giving up after one attempt. */
+function joinInvite(code,tries=0){
   window.STORM_INVITE=true;window.updSecret&&updSecret();
-  showView('storm');
+  if(!tries)showView('storm');
   const show=(html,foot)=>panel('🌐 Гра по мережі',`<div id="coachBox"></div>${html}`,foot||`<button class="btn g" id="wxCancel">Скасувати</button>`);
-  const bindCancel=()=>{if($('#wxCancel'))$('#wxCancel').onclick=()=>{netClose();showView('storm')}};
-  show(`<div class="card">⏳ Підключаюся до друга (код <b>${esc(code)}</b>)…</div>`);bindCancel();
-  coachSay('Тебе запросили в Шахи-Бурю! Звичайні шахи, але погода за вікном змінює партію.');
-  CUR={stop(keep){if(!keep)netClose()}};
+  let cancelled=false;
+  const bindCancel=()=>{if($('#wxCancel'))$('#wxCancel').onclick=()=>{cancelled=true;clearTimeout(window.__joinT);netClose();showView('storm')}};
+  show(`<div class="card">⏳ Підключаюся до друга (код <b>${esc(code)}</b>)…${tries?`<div class="small mut" style="margin-top:6px">Спроба ${tries+1}. Друг має тримати відкритою сторінку з запрошенням (не закривати й не блокувати телефон).</div>`:''}</div>`);bindCancel();
+  if(!tries)coachSay('Тебе запросили в Шахи-Бурю! Звичайні шахи, але погода за вікном змінює партію.');
+  CUR={stop(keep){cancelled=true;clearTimeout(window.__joinT);if(!keep)netClose()}};
   netJoin(code,()=>{show(`<div class="card">✅ З’єднано! Чекаю на початок партії…</div>`);bindCancel()},
-    e=>{show(`<div class="card" style="border:2px solid var(--red)">${esc(netErr(e))}</div>`,`<button class="btn" id="wxRetry">Спробувати ще раз</button><button class="btn g" id="wxCancel">Назад</button>`);bindCancel();$('#wxRetry').onclick=()=>joinInvite(code)}).catch(()=>{show(`<div class="card" style="border:2px solid var(--red)">Не вдалося завантажити модуль гри по мережі. Перевір інтернет.</div>`);bindCancel()});
+    e=>{if(cancelled)return;const lost=e&&(e.type==='peer-unavailable'||e.type==='network'||e.type==='server-error'||e.type==='socket-error'||e.type==='socket-closed'||e.type==='disconnected');
+      if(lost&&tries<30){show(`<div class="card">⏳ Друга поки не видно (код <b>${esc(code)}</b>).<div class="small mut" style="margin-top:6px">Пробую знову… Попроси друга не закривати сторінку з запрошенням. Якщо він її закрив, хай створить нове запрошення й надішле нове посилання.</div></div>`);bindCancel();
+        clearTimeout(window.__joinT);window.__joinT=setTimeout(()=>{if(!cancelled)joinInvite(code,tries+1)},4000);return}
+      show(`<div class="card" style="border:2px solid var(--red)">${esc(netErr(e))}<div class="small mut" style="margin-top:6px">Попроси друга створити нове запрошення.</div></div>`,`<button class="btn" id="wxRetry">Спробувати ще раз</button><button class="btn g" id="wxCancel">Назад</button>`);bindCancel();$('#wxRetry').onclick=()=>joinInvite(code)}).catch(()=>{show(`<div class="card" style="border:2px solid var(--red)">Не вдалося завантажити модуль гри по мережі. Перевір інтернет.</div>`);bindCancel()});
 }
 {
   const inv=new URLSearchParams(location.search).get('storm');
